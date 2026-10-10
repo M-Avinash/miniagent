@@ -1,6 +1,8 @@
 # miniagent — A Lean, Robust Agent Framework
 
-A small agent framework built from scratch with **pi coding agent** on a **local Qwen3 27B** (RTX 3090, llama.cpp). The loop is the orchestration — no graphs, no DAGs, no orchestration engines. Just the primitives that make an agent loop useful.
+A small agent framework built from scratch with **pi coding agent** on a **local Qwen3 27B** (RTX 3090, llama.cpp). The loop is the orchestration — no graphs, no DAGs, no orchestration engines. Just the primitives that make an agent loop useful, plus a handoff orchestrator for when you genuinely need more than one agent.
+
+> **Live example:** a multi-agent QnA chatbot over the SAP Northwind OData service — ask questions in natural language, get answers computed from live data. See [Northwind QnA](#northwind-qna-multi-agent-example).
 
 ## Design Philosophy
 
@@ -15,6 +17,7 @@ An agent is a **loop**: the LLM observes, decides, acts, and observes again. Eve
 7. **Sandbox** — execute Python code in a subprocess (timeout, errors as strings)
 8. **Observability** — `verbose_log` hook (per-agent labeled event printing)
 9. **Observational memory** — distilled observations (JSONL store, capped, recall into system prompt)
+10. **Handoff orchestrator** — run multiple agents, each handing off to the next (no graph, no DAG)
 
 ## Architecture
 
@@ -54,8 +57,8 @@ An agent is a **loop**: the LLM observes, decides, acts, and observes again. Eve
 
 ### Key design decisions
 
-**1. The loop is the orchestration.**
-`agent.py` contains the *only* tool-calling loop. The playground, heartbeat, and any future code all call `agent.run()`. No separate loops, no DAGs, no orchestration engines.
+**1. The loop is the orchestration — for a single agent.**
+`agent.py` contains the *only* tool-calling loop. The playground, heartbeat, and any future code all call `agent.run()`. No separate loops, no DAGs, no orchestration engines. When you need *multiple* agents, you don't reach for a graph — you reach for the handoff orchestrator, which is just a loop over `agent.run()` calls (see below).
 
 **2. The `@tool` decorator does the heavy lifting.**
 A Python function with type hints and a docstring becomes a fully-specified tool. The framework introspects the signature to build the JSON schema, parses the docstring for parameter descriptions, and handles sync/async execution. Defining a tool is as simple as writing a function.
@@ -71,6 +74,7 @@ Rather than relying on provider-specific `response_format` or `structured_output
 - The agent is bounded by `max_tool_calls` (default 10) — if the model doesn't answer by then, it returns an aborted result.
 - The sandbox runs code in a subprocess with a timeout — a hang or crash only kills the subprocess, not the agent.
 - Hooks are wrapped in try/except — a buggy hook never kills the agent.
+- The orchestrator is bounded by `max_handoffs` — a handoff loop can never run forever.
 
 ## Quick Start
 
@@ -187,6 +191,58 @@ system_prompt = base_prompt + om.recall_prompt()
 agent2 = Agent(system_prompt, ...)
 ```
 
+## Handoff Orchestrator
+
+When one agent isn't enough, `HandoffOrchestrator` runs a chain of agents. Each agent can hand off to the next by setting `event.data["handoff"]` in an `AGENT_END` hook. The orchestrator follows the chain until an agent returns a result with no handoff (or `max_handoffs` is hit).
+
+```python
+from miniagent import Agent, HandoffOrchestrator, EventType
+
+def handoff_to_analyst(event):
+    if event.type == EventType.AGENT_END:
+        event.data["handoff"] = "analyst"   # hand off to the agent named "analyst"
+    return event
+
+planner = Agent("You plan. Then hand off.", hooks=[handoff_to_analyst], name="planner")
+analyst = Agent("You analyze.", name="analyst")
+
+orch = HandoffOrchestrator(
+    [planner, analyst],
+    max_handoffs=5,
+    agent_names={"planner": planner, "analyst": analyst},
+)
+result = orch.run("Analyze the sales data for Q2")
+```
+
+**How handoffs work:** an agent's hook inspects the final text (or any condition) and sets `event.data["handoff"]` to the name of the next agent. The orchestrator looks that name up in `agent_names` and runs it. No graph, no DAG — just a loop over `agent.run()`.
+
+**Sharing data between agents:** don't pass large data through tool-call arguments (local models truncate long JSON). Use a shared state object — the previous agent stores the result, the next agent reads it via a tool. This is what the Northwind example does.
+
+## Northwind QnA (Multi-Agent Example)
+
+A live, working example: a terminal chatbot that answers questions about the SAP Northwind OData service using a three-agent handoff chain.
+
+```
+Orchestrator ──handoff──▶ Data Fetcher ──handoff──▶ Data Analyst
+   (understands)            (builds OData query)        (runs Python on the data)
+```
+
+- **Orchestrator** — reads the question, hands off to the data fetcher.
+- **Data Fetcher** — builds and runs the OData query, stores the full result in shared state, hands off to the analyst.
+- **Data Analyst** — runs Python against the shared data (via the `analyze_data` tool) and returns the final answer.
+
+```bash
+cd miniagent
+python -m miniagent.northwind_qna
+
+You: How many orders were shipped to Germany in Q2 1997, and how many were
+     delivered within 3 weeks of the order date?
+Answer: 20 orders were shipped to Germany in Q2 1997. 16 were delivered within
+        3 weeks; 4 took longer.
+```
+
+Every step streams to the terminal (via `verbose_log`), labeled by agent. See [`NORTHWIND_TEST_QUESTIONS.md`](NORTHWIND_TEST_QUESTIONS.md) for 10 questions that stress-test joins, date math, and grouping.
+
 ## Project Structure
 
 ```
@@ -203,7 +259,10 @@ miniagent/
 ├── sandbox.py           # run_python tool (subprocess execution)
 ├── observe.py           # verbose_log hook
 ├── observation.py       # ObservationalMemory (distilled JSONL store)
+├── orchestrator.py      # HandoffOrchestrator (multi-agent handoff loop)
 ├── playground.py        # Interactive driving range
+├── northwind_qna.py     # Example: multi-agent OData QnA chatbot
+├── NORTHWIND_TEST_QUESTIONS.md  # Test questions for the Northwind example
 ├── config.env           # Local config (gitignored)
 └── .env.example         # Config template
 ```
@@ -236,6 +295,10 @@ The framework was built iteratively, working with pi as a pair programmer on a l
 
 10. **Observational memory** — Distilled observations (JSONL store, capped, recall into system prompt). No embeddings, no RAG.
 
+11. **Handoff orchestrator** — A loop over `agent.run()` calls. Each agent's hook can set `event.data["handoff"]` to delegate to the next agent. Bounded by `max_handoffs`. No graph, no DAG.
+
+12. **Northwind QnA** — A live multi-agent example over the SAP Northwind OData service. Three agents (orchestrator → data fetcher → data analyst) connected by handoffs, sharing data through a state object so large JSON never passes through a tool-call argument.
+
 ### Validation
 
 - ✅ Tool calling: Agent correctly calls tools, handles bad JSON, unknown tools, and tool exceptions
@@ -244,12 +307,16 @@ The framework was built iteratively, working with pi as a pair programmer on a l
 - ✅ Sandbox: Basic execution, runtime errors, syntax errors, timeouts, non-zero exit
 - ✅ Observability: `verbose_log` prints every event with per-agent labeling
 - ✅ Observational memory: Distills runs into observations, recalls into system prompt
+- ✅ Handoff orchestrator: Multi-agent chain runs end-to-end (orchestrator → fetcher → analyst)
+- ✅ Northwind QnA: Answers live OData questions (multi-condition filters, date arithmetic, joins)
 - ✅ Works with any OpenAI-compatible endpoint (tested with llama.cpp + Qwen3 27B)
 
 ## Requirements
 
 - Python 3.10+
 - An OpenAI-compatible API (OpenAI, Ollama, vLLM, llama.cpp server, etc.)
+- `openai` (Python package)
+- `requests` (only for the Northwind OData example)
 
 ## Configuration
 

@@ -50,3 +50,6 @@ class AgentResult:
     # producing a normal final answer. A normal run leaves these at their defaults.
     aborted: bool = False
     abort_reason: str = None
+    # Set when the agent wants to hand off to another agent (multi-agent).
+    # The value is the name of the agent to hand off to.
+    handoff: str = None

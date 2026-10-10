@@ -20,13 +20,14 @@ from .memory import Memory
 
 class Agent:
     def __init__(self, system_prompt, llm=None, tools=None, memory=None,
-                 hooks=None, max_tool_calls=10, max_messages=50):
+                 hooks=None, max_tool_calls=10, max_messages=50, name=None):
         self.system_prompt = system_prompt
         self.llm = llm or LLMClient()
         self.tools = tools or []
         self.memory = memory or Memory(max_messages=max_messages)
         self.hooks = HookPipeline(hooks)
         self.max_tool_calls = max_tool_calls
+        self.name = name   # used for handoff targeting in multi-agent setups
 
     # ------------------------------------------------------------------ run
     def run(self, user_message: str) -> AgentResult:
@@ -80,10 +81,14 @@ class Agent:
 
             # No tool call -> this is the final answer.
             if not msg.tool_calls:
-                ev = self.hooks.emit(HookEvent(type=EventType.AGENT_END, turn=turn,
-                                               messages=self.memory.get_messages()))
-                return AgentResult(text=ev.data.get("final_text", last_text) if ev.data else last_text,
-                                   turns=turn, tool_calls=all_tool_calls, usage=usage)
+                ev = HookEvent(type=EventType.AGENT_END, turn=turn,
+                               messages=self.memory.get_messages())
+                ev.data["final_text"] = last_text   # make it available to hooks
+                ev = self.hooks.emit(ev)
+                final_text = ev.data.get("final_text", last_text) if ev.data else last_text
+                handoff = ev.data.get("handoff")   # a hook can set this to hand off
+                return AgentResult(text=final_text, turns=turn, tool_calls=all_tool_calls,
+                                   usage=usage, handoff=handoff)
 
             # Tool call(s): run each, feed results back, and loop.
             for tc in msg.tool_calls:

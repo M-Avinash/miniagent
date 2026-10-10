@@ -24,6 +24,7 @@ from .heartbeat import HeartbeatAgent
 from .sandbox import run_python
 from .observe import verbose_log
 from .observation import ObservationalMemory
+from .orchestrator import HandoffOrchestrator
 
 __all__ = [
     # Core
@@ -37,4 +38,5 @@ __all__ = [
     "run_python",
     "verbose_log",
     "ObservationalMemory",
+    "HandoffOrchestrator",
 ]
