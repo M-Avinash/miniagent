@@ -46,3 +46,7 @@ class AgentResult:
     tool_calls: list = field(default_factory=list)
     structured: Any = None
     usage: dict = field(default_factory=dict)
+    # Set when the run stopped early (e.g. hit the tool-call limit) instead of
+    # producing a normal final answer. A normal run leaves these at their defaults.
+    aborted: bool = False
+    abort_reason: str = None

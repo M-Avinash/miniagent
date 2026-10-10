@@ -118,8 +118,14 @@ class Tool:
         """The JSON schema sent to the LLM."""
         return self.schema
 
-    async def execute(self, **kwargs):
-        """Run the tool. Always returns a string (what goes back to the LLM)."""
+    async def execute(self, *args, **kwargs):
+        """Run the tool. Always returns a string (what goes back to the LLM).
+
+        Accepts either a single dict of arguments (execute({"city": "Paris"}))
+        or keyword arguments (execute(city="Paris")).
+        """
+        if len(args) == 1 and isinstance(args[0], dict) and not kwargs:
+            kwargs = args[0]
         if self.is_async:
             result = await self.func(**kwargs)
         else:
@@ -130,16 +136,19 @@ class Tool:
             return json.dumps(result, indent=2, default=str)
         return str(result)
 
-    def __call__(self, **kwargs):
-        """Call the tool directly (for your code, not the LLM)."""
+    def __call__(self, *args, **kwargs):
+        """Call the tool directly (for your code, not the LLM).
+
+        Accepts a dict of arguments or keyword arguments, like execute().
+        """
         try:
             asyncio.get_running_loop()
             # Already inside async code — can't asyncio.run() here.
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                return pool.submit(asyncio.run, self.execute(**kwargs)).result()
+                return pool.submit(asyncio.run, self.execute(*args, **kwargs)).result()
         except RuntimeError:
-            return asyncio.run(self.execute(**kwargs))
+            return asyncio.run(self.execute(*args, **kwargs))
 
 
 def tool(func=None, *, name=None, description=None):

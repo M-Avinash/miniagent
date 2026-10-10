@@ -187,7 +187,7 @@ observes the results, and remembers what it learned across runs.
 | 4. `hooks.py` | ✅ |
 | 5. `memory.py` | ✅ |
 | 6. `structured.py` | ✅ |
-| 7. `agent.py` | ⬜ |
+| 7. `agent.py` | ✅ |
 | 8. `heartbeat.py` | ⬜ |
 | 9. `sandbox.py` | ⬜ |
 | 10. `observe.py` | ⬜ |
