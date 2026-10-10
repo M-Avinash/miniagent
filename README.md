@@ -267,50 +267,6 @@ miniagent/
 └── .env.example         # Config template
 ```
 
-## Development Approach
-
-### Coding Agent Used: **pi coding agent** (local LLM: Qwen3 27B, RTX 3090, llama.cpp)
-
-### How I Worked
-
-The framework was built iteratively, working with pi as a pair programmer on a local LLM (Qwen3 27B on an RTX 3090 via llama.cpp):
-
-1. **Scaffold** — Defined the core abstractions: what is an Agent, what is a Tool, what is a Hook. Wrote the event system and module structure.
-
-2. **LLM client** — Built the OpenAI-compatible client with config precedence (args > env/config.env > defaults). Tested against a local llama.cpp server.
-
-3. **Tool system** — Built the `@tool` decorator with schema introspection. The tricky part was docstring parsing for parameter descriptions and handling the dual-mode decorator (bare `@tool` vs. `@tool(name=..., description=...)`).
-
-4. **Agent loop** — Implemented the unified tool-calling loop. Tools stay available every turn; `tool_choice="required"` on turn 1, `"auto"` after. The model stops naturally when it decides to answer. Crash-safe tool execution, bounded by `max_tool_calls`.
-
-5. **Structured output** — JSON extraction from messy LLM text (fenced, chatter, nested, garbage) + optional field validation. No Pydantic.
-
-6. **Hooks** — Middleware pattern. Hooks can observe, modify, or abort. Each hook is wrapped in try/except — a buggy hook never kills the agent.
-
-7. **Heartbeat** — Interval runner with optional maker-checker. Not a new loop — just a while-loop with a sleep that calls `agent.run()`.
-
-8. **Sandbox** — `run_python` tool. Subprocess with timeout. Errors and timeouts come back as strings, never as exceptions that kill the agent.
-
-9. **Observability** — `verbose_log` hook. Per-agent labeled event printing. Optional debug level and JSONL-to-file mode.
-
-10. **Observational memory** — Distilled observations (JSONL store, capped, recall into system prompt). No embeddings, no RAG.
-
-11. **Handoff orchestrator** — A loop over `agent.run()` calls. Each agent's hook can set `event.data["handoff"]` to delegate to the next agent. Bounded by `max_handoffs`. No graph, no DAG.
-
-12. **Northwind QnA** — A live multi-agent example over the SAP Northwind OData service. Three agents (orchestrator → data fetcher → data analyst) connected by handoffs, sharing data through a state object so large JSON never passes through a tool-call argument.
-
-### Validation
-
-- ✅ Tool calling: Agent correctly calls tools, handles bad JSON, unknown tools, and tool exceptions
-- ✅ Structured output: `parse_structured()` handles clean JSON, fenced JSON, chatter, nested, and garbage
-- ✅ Heartbeat: Bounded runs, `run_forever` with `max_beats`, maker-checker
-- ✅ Sandbox: Basic execution, runtime errors, syntax errors, timeouts, non-zero exit
-- ✅ Observability: `verbose_log` prints every event with per-agent labeling
-- ✅ Observational memory: Distills runs into observations, recalls into system prompt
-- ✅ Handoff orchestrator: Multi-agent chain runs end-to-end (orchestrator → fetcher → analyst)
-- ✅ Northwind QnA: Answers live OData questions (multi-condition filters, date arithmetic, joins)
-- ✅ Works with any OpenAI-compatible endpoint (tested with llama.cpp + Qwen3 27B)
-
 ## Requirements
 
 - Python 3.10+
