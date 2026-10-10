@@ -1,0 +1,12 @@
+# local config (your API keys / local server URL)
+config.env
+
+# python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+
+# agent runtime artifacts
+observations.jsonl
+audit.log
