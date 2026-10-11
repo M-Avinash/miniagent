@@ -29,7 +29,7 @@ def verbose_log(label: str = "agent", debug: bool = False, log_file: str = None)
 
         if event.type.value == "agent_start":
             msg = event.data.get("user_message", "")
-            line = f"{prefix} START: {msg[:120]}"
+            line = f"{prefix} START: {msg[:200]}"
         elif event.type.value == "llm_call":
             n_msgs = len(event.messages or [])
             line = f"{prefix} LLM call (turn {event.turn}, {n_msgs} messages)"
