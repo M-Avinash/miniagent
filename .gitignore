@@ -10,3 +10,6 @@ __pycache__/
 # agent runtime artifacts
 observations.jsonl
 audit.log
+
+# working examples (scratch / demo code, not part of the package)
+working-examples/
