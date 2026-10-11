@@ -144,6 +144,8 @@ https://services.odata.org/V4/Northwind/Northwind.svc/Orders
 https://services.odata.org/V4/Northwind/Northwind.svc/Orders?$filter=ShipCountry%20eq%20%27Germany%27
 ```
 
+**Step 4:** You can ask single-turn or multi-turn questions against this service. Example questions are in [`Northwind_test_questions.md`](examples/Northwind_test_questions.md).
+
 ## Development and Validation Approach
 
 I worked with the coding agent as a pair programmer. I designed the architecture first, the module layout, the agentic loop, the handoff mechanism and then the LLM implement each piece which I reviwed. The agent generated the code based on my architectural decisions. I validated each module with unit tests as we went, which also tied the different parts of the framework together.
