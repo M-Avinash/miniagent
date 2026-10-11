@@ -60,7 +60,7 @@ class LLMClient:
             int(max_retries) if max_retries is not None
             else int(os.environ.get("MINIAGENT_MAX_RETRIES", len(_RETRY_DELAYS)))
         )
-        self.model = model or os.environ.get("MINIAGENT_MODEL", "gpt-4o")
+        self.model = model or os.environ.get("MINIAGENT_MODEL", "gpt-5.6-luna")
         self.temperature = float(
             temperature if temperature is not None
             else os.environ.get("MINIAGENT_TEMPERATURE", 0.7)
