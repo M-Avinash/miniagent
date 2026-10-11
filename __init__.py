@@ -1,7 +1,7 @@
-"""miniagent — a lean, robust agent framework.
+"""miniagent — a minimal agent framework.
 
-The loop is the orchestration. One tool-calling loop in agent.py, everything
-else is a tool, a hook, or a wrapper.
+The agentic loop lives in agent.py; everything else is a tool, a hook,
+or a wrapper.
 
 Public API:
     Agent, LLMClient, Memory, Tool, tool
