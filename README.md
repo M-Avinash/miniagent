@@ -73,6 +73,8 @@ MINIAGENT_REASONING_EFFORT=none
 python examples/northwind_qna.py
 ```
 
+**Step 4:** You're now in the chatbot. Type a question and press Enter. You can ask single-turn or multi-turn questions — example questions are in [`Northwind_test_questions.md`](examples/Northwind_test_questions.md). Type `reset` to clear context, `quit` to exit.
+
 ## Example: Northwind Multi-Agent Chatbot
 
 A terminal chatbot that answers natural-language questions against the SAP Northwind OData service. You type a question, it fetches live data, runs Python analysis, and returns an answer.
@@ -143,8 +145,6 @@ https://services.odata.org/V4/Northwind/Northwind.svc/Orders
 # Orders with a filter
 https://services.odata.org/V4/Northwind/Northwind.svc/Orders?$filter=ShipCountry%20eq%20%27Germany%27
 ```
-
-**Step 4:** You can ask single-turn or multi-turn questions against this service. Example questions are in [`Northwind_test_questions.md`](examples/Northwind_test_questions.md).
 
 ## Development and Validation Approach
 
