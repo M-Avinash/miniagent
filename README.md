@@ -1,6 +1,6 @@
 # miniagent
 
-A minimal agent framework. Built with **Pi coding agent** and a self-hosted **Qwen3.8 27B LLM(llama.cpp, RTX 3090)**. The agentic loop lives in `agent.py`; everything else is a tool, a hook, or a wrapper. Runs on any OpenAI-compatible API. Scales from single agent to multi-agent handoff chains.
+A minimal agent framework. Built with **Pi coding agent** and a self-hosted **Qwen3.8 27B LLM (llama.cpp, RTX 3090)**. The agentic loop lives in `agent.py`; everything else is a tool, a hook, or a wrapper. Runs on any OpenAI-compatible API. Scales from single agent to multi-agent handoff chains.
 
 ## Modules
 
