@@ -35,13 +35,11 @@ def extract_json(text: str):
         raise ValueError("no text to parse")
     text = text.strip()
 
-    # 1. The whole thing is already valid JSON.
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
 
-    # 2. A fenced block: ```json ... ``` or ``` ... ```
     fence = re.search(r"```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```", text, re.DOTALL)
     if fence:
         try:
@@ -49,7 +47,6 @@ def extract_json(text: str):
         except json.JSONDecodeError:
             pass
 
-    # 3. The first balanced object or array anywhere in the text.
     for opener, closer in (("{", "}"), ("[", "]")):
         start = text.find(opener)
         if start == -1:

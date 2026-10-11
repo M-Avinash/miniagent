@@ -61,9 +61,8 @@ def verbose_log(label: str = "agent", debug: bool = False, log_file: str = None)
                         f.write(json.dumps({"label": label, "type": event.type.value,
                                             "turn": event.turn, "log": line}) + "\n")
                 except OSError:
-                    pass   # logging must never crash the agent
+                    pass
 
-        # Debug mode: dump full payloads
         if debug:
             if event.type.value == "llm_call" and event.messages:
                 for m in event.messages:

@@ -19,6 +19,8 @@ from .memory import Memory
 
 
 class Agent:
+    """A single agent: an LLM + tools + memory + hooks, driven by run()."""
+
     def __init__(self, system_prompt, llm=None, tools=None, memory=None,
                  hooks=None, max_tool_calls=10, max_messages=50, name=None):
         self.system_prompt = system_prompt
@@ -27,11 +29,17 @@ class Agent:
         self.memory = memory or Memory(max_messages=max_messages)
         self.hooks = HookPipeline(hooks)
         self.max_tool_calls = max_tool_calls
-        self.name = name   # used for handoff targeting in multi-agent setups
+        self.name = name
 
-    # ------------------------------------------------------------------ run
     def run(self, user_message: str) -> AgentResult:
-        # Fresh conversation for this run: system prompt + the user's message.
+        """Run the tool-calling loop for one user message.
+
+        Each run starts with a fresh conversation (system prompt + user
+        message). The loop is bounded by max_tool_calls; if it runs out of
+        turns without a final answer, it returns a graceful abort. A hook can
+        set event.data["abort"] to stop early, or event.data["handoff"] to
+        hand off to another agent (multi-agent).
+        """
         self.memory.clear()
         self.memory.add({"role": "system", "content": self.system_prompt})
         self.memory.add({"role": "user", "content": user_message})
@@ -39,17 +47,15 @@ class Agent:
         all_tool_calls = []
         usage = {}
 
-        # AGENT_START — a hook can vet the input and abort before we begin.
         ev = self.hooks.emit(HookEvent(type=EventType.AGENT_START, data={"user_message": user_message}))
         if ev.data.get("abort"):
             return self._aborted("aborted at start: " + str(ev.data.get("abort_reason", "")),
                                  0, all_tool_calls, usage)
 
-        max_turns = self.max_tool_calls + 1   # tool-call turns + one answer turn
+        max_turns = self.max_tool_calls + 1
         last_text = ""
 
         for turn in range(1, max_turns + 1):
-            # LLM_CALL — a hook can modify the messages or abort the call.
             messages = self.memory.get_messages()
             ev = self.hooks.emit(HookEvent(type=EventType.LLM_CALL, turn=turn, messages=messages))
             if ev.data.get("abort"):
@@ -57,7 +63,6 @@ class Agent:
                                      turn, all_tool_calls, usage)
             messages = ev.messages if ev.messages is not None else messages
 
-            # Tools are available every turn; force a tool on turn 1 only.
             tool_choice = "required" if (turn == 1 and self.tools) else "auto"
             resp = self.llm.chat(
                 messages,
@@ -66,7 +71,6 @@ class Agent:
             )
             msg = resp.choices[0].message
 
-            # LLM_RESPONSE — a hook can inspect/modify the response or abort.
             ev = self.hooks.emit(HookEvent(type=EventType.LLM_RESPONSE, turn=turn,
                                            messages=messages, response=msg))
             if ev.data.get("abort"):
@@ -79,18 +83,16 @@ class Agent:
             if getattr(resp, "usage", None):
                 usage = self._usage_dict(resp.usage)
 
-            # No tool call -> this is the final answer.
             if not msg.tool_calls:
                 ev = HookEvent(type=EventType.AGENT_END, turn=turn,
                                messages=self.memory.get_messages())
-                ev.data["final_text"] = last_text   # make it available to hooks
+                ev.data["final_text"] = last_text
                 ev = self.hooks.emit(ev)
                 final_text = ev.data.get("final_text", last_text) if ev.data else last_text
-                handoff = ev.data.get("handoff")   # a hook can set this to hand off
+                handoff = ev.data.get("handoff")
                 return AgentResult(text=final_text, turns=turn, tool_calls=all_tool_calls,
                                    usage=usage, handoff=handoff)
 
-            # Tool call(s): run each, feed results back, and loop.
             for tc in msg.tool_calls:
                 name = tc.function.name
                 try:
@@ -98,40 +100,52 @@ class Agent:
                 except json.JSONDecodeError:
                     args = {}
                 all_tool_calls.append({"name": name, "args": args})
-                result = self._run_tool(tc, turn, args)
+                result, tool_ev = self._run_tool(tc, turn, args)
                 self.memory.add({"role": "tool", "tool_call_id": tc.id, "content": result})
 
-        # Ran out of turns without a final answer -> graceful abort.
+                if tool_ev and tool_ev.data.get("handoff"):
+                    return AgentResult(
+                        text=last_text or f"[handoff: {tool_ev.data['handoff']}]",
+                        turns=turn, tool_calls=all_tool_calls,
+                        usage=usage, handoff=tool_ev.data["handoff"])
+
         return self._aborted(f"max tool calls ({self.max_tool_calls}) reached",
                              max_turns, all_tool_calls, usage, text=last_text)
 
-    # ------------------------------------------------------------- helpers
-    def _run_tool(self, tc, turn, args) -> str:
+    def _run_tool(self, tc, turn, args) -> tuple:
+        """Run a tool call. Returns (result_string, tool_call_event).
+
+        Crash-safe: an unknown tool or a tool that raises returns an
+        "[error: ...]" string rather than killing the agent. A hook can abort
+        the call (returning "[aborted: ...]") or set a handoff.
+        """
         name = tc.function.name
 
         ev = self.hooks.emit(HookEvent(type=EventType.TOOL_CALL, turn=turn,
                                        tool_name=name, tool_args=args))
         if ev.data.get("abort"):
-            return f"[aborted: {ev.data.get('abort_reason', 'tool call blocked')}]"
+            return f"[aborted: {ev.data.get('abort_reason', 'tool call blocked')}]", ev
         args = ev.tool_args if ev.tool_args is not None else args
 
         tool_obj = self._find_tool(name)
         if tool_obj is None:
-            return f"[error: unknown tool '{name}']"
+            return f"[error: unknown tool '{name}']", ev
 
         try:
-            result = tool_obj(args)   # __call__ handles sync/async execution
-        except Exception as e:   # a crashing tool must not kill the agent
+            result = tool_obj(args)
+        except Exception as e:
             result = f"[error: {type(e).__name__}: {e}]"
 
         if isinstance(result, (dict, list)):
             result = json.dumps(result)
 
-        ev = self.hooks.emit(HookEvent(type=EventType.TOOL_RESULT, turn=turn,
-                                       tool_name=name, tool_args=args, tool_result=result))
-        return ev.tool_result if ev.tool_result is not None else result
+        ev_result = self.hooks.emit(HookEvent(type=EventType.TOOL_RESULT, turn=turn,
+                                              tool_name=name, tool_args=args, tool_result=result))
+        final_result = ev_result.tool_result if ev_result.tool_result is not None else result
+        return final_result, ev
 
     def _find_tool(self, name: str):
+        """Return the Tool with the given name, or None."""
         for t in self.tools:
             if t.name == name:
                 return t
@@ -139,11 +153,13 @@ class Agent:
 
     @staticmethod
     def _aborted(reason, turns, tool_calls, usage, text="") -> AgentResult:
+        """Build an AgentResult marked as aborted."""
         return AgentResult(text=text, turns=turns, tool_calls=tool_calls,
                            usage=usage, aborted=True, abort_reason=reason)
 
     @staticmethod
     def _usage_dict(usage) -> dict:
+        """Flatten an OpenAI usage object into a plain dict."""
         return {
             "prompt_tokens": getattr(usage, "prompt_tokens", 0),
             "completion_tokens": getattr(usage, "completion_tokens", 0),

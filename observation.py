@@ -1,12 +1,9 @@
 """observation.py — distilled observational memory.
 
-Instead of persisting raw conversations (expensive, noisy), ObservationalMemory
-distills each agent run into a brief observation (1-3 lines, ~50 words) and
-appends it to a capped JSONL file. On the next run, the last N observations
-are injected into the system prompt so the agent has continuity without the
-full transcript.
-
-No embeddings, no vector DB, no RAG — just a rolling log of what happened.
+ObservationalMemory distills each agent run into a brief observation
+(1-3 lines, ~50 words) and appends it to a capped JSONL file. On the next
+run, the last N observations are injected into the system prompt so the
+agent has continuity without the full transcript.
 
 Usage:
     from miniagent.observation import ObservationalMemory
@@ -22,13 +19,21 @@ from collections import deque
 
 
 class ObservationalMemory:
+    """A rolling log of distilled observations, stored as JSONL.
+
+    Args:
+        label: A short tag identifying this agent (stored on each observation).
+        path: Path to the JSONL file.
+        max_entries: Cap on the number of observations kept (FIFO).
+        recall_count: How many recent observations to recall into the prompt.
+    """
+
     def __init__(self, label: str, path: str = "observations.jsonl",
                  max_entries: int = 50, recall_count: int = 5):
         self.label = label
         self.path = path
         self.max_entries = max_entries
         self.recall_count = recall_count
-        # Load existing observations into a deque (FIFO, capped)
         self._entries = deque(maxlen=max_entries)
         self._load()
 
@@ -43,7 +48,7 @@ class ObservationalMemory:
                     if line:
                         self._entries.append(json.loads(line))
         except (json.JSONDecodeError, OSError):
-            pass   # corrupt file — start fresh
+            pass
 
     def _save(self):
         """Persist all observations to the JSONL file (overwrite, capped)."""
@@ -52,15 +57,13 @@ class ObservationalMemory:
                 for entry in self._entries:
                     f.write(json.dumps(entry) + "\n")
         except OSError:
-            pass   # disk error — don't crash the agent
+            pass
 
-    # ------------------------------------------------------------- hook
     def hook(self, event):
         """AGENT_END hook: distill the run into an observation and store it."""
         if event.type.value != "agent_end":
             return event
 
-        # Build a brief observation from the final result
         messages = event.messages or []
         user_msg = ""
         for m in messages:
@@ -83,7 +86,6 @@ class ObservationalMemory:
         self._save()
         return event
 
-    # ------------------------------------------------------------- recall
     def recall(self, count: int = None):
         """Return the last N observations (most recent last)."""
         count = count or self.recall_count

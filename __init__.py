@@ -7,7 +7,7 @@ Public API:
     Agent, LLMClient, Memory, Tool, tool
     HookEvent, HookFn, HookPipeline, EventType, AgentResult
     build_structured_prompt, extract_json, parse_structured
-    HeartbeatAgent
+    HeartbeatAgent, HEARTBEAT_OK
     run_python
     verbose_log
     ObservationalMemory
@@ -20,23 +20,25 @@ from .memory import Memory
 from .tool import Tool, tool
 from .agent import Agent
 from .structured import build_structured_prompt, extract_json, parse_structured
-from .heartbeat import HeartbeatAgent
+from .heartbeat import HeartbeatAgent, HEARTBEAT_OK
 from .sandbox import run_python
 from .observe import verbose_log
 from .observation import ObservationalMemory
-from .orchestrator import HandoffOrchestrator
+from .orchestrator import HandoffOrchestrator, make_handoff_tool, handoff_hook
+from .graph_memory import GraphMemory, graph_memory_hook, graph_injection_hook
 
 __all__ = [
-    # Core
     "Agent", "LLMClient", "Memory", "Tool", "tool",
-    # Events & hooks
     "HookEvent", "HookFn", "HookPipeline", "EventType", "AgentResult",
-    # Structured output
     "build_structured_prompt", "extract_json", "parse_structured",
-    # Capabilities
-    "HeartbeatAgent",
+    "HeartbeatAgent", "HEARTBEAT_OK",
     "run_python",
     "verbose_log",
     "ObservationalMemory",
     "HandoffOrchestrator",
+    "make_handoff_tool",
+    "handoff_hook",
+    "GraphMemory",
+    "graph_memory_hook",
+    "graph_injection_hook",
 ]

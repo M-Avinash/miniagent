@@ -20,36 +20,52 @@ class EventType(str, Enum):
 
 @dataclass
 class HookEvent:
-    """Payload handed to hooks at each event. Only relevant fields are set."""
+    """Payload handed to hooks at each event. Only relevant fields are set.
+
+    Fields:
+        type: which event this is (see EventType).
+        turn: the loop turn number (1-based).
+        messages: the conversation sent to / received from the LLM.
+        response: the assistant message that came back from the LLM.
+        tool_name / tool_args / tool_result: set on TOOL_CALL / TOOL_RESULT.
+        error: set on ERROR events.
+        data: catch-all for event-specific extras. Hooks read/write this —
+            e.g. data["abort"] stops the run, data["handoff"] routes to
+            another agent, data["final_text"] carries the final answer.
+    """
 
     type: EventType
     turn: int = 0
-    # LLM-related
-    messages: list = None       # conversation sent to / received from the LLM
-    response: Any = None        # the assistant message that came back
-    # Tool-related
+    messages: list = None
+    response: Any = None
     tool_name: str = None
     tool_args: dict = None
     tool_result: Any = None
-    # Error-related
     error: Exception = None
-    # Catch-all for event-specific extras
     data: dict = field(default_factory=dict)
 
 
 @dataclass
 class AgentResult:
-    """Return value of agent.run() — the receipt for one agent run."""
+    """Return value of agent.run() — the receipt for one agent run.
+
+    Fields:
+        text: the final answer text (or the handoff marker).
+        turns: how many LLM turns the run took.
+        tool_calls: list of {name, args} dicts for every tool call made.
+        structured: optional structured output (if the agent produced one).
+        usage: token usage (prompt/completion/total).
+        aborted: True if the run stopped early (e.g. hit the tool-call limit
+            or a hook set abort) instead of producing a normal final answer.
+        abort_reason: why it stopped, when aborted.
+        handoff: the name of the agent to hand off to (multi-agent), or None.
+    """
 
     text: str
     turns: int
     tool_calls: list = field(default_factory=list)
     structured: Any = None
     usage: dict = field(default_factory=dict)
-    # Set when the run stopped early (e.g. hit the tool-call limit) instead of
-    # producing a normal final answer. A normal run leaves these at their defaults.
     aborted: bool = False
     abort_reason: str = None
-    # Set when the agent wants to hand off to another agent (multi-agent).
-    # The value is the name of the agent to hand off to.
     handoff: str = None

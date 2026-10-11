@@ -12,7 +12,6 @@ import json
 import re
 from typing import get_type_hints
 
-# Python type -> JSON Schema type.
 _TYPE_MAP = {
     str: "string",
     int: "integer",
@@ -24,10 +23,12 @@ _TYPE_MAP = {
 
 
 def _python_type_to_json_schema(tp):
-    """Map a Python type to a JSON schema fragment."""
+    """Map a Python type to a JSON schema fragment.
+
+    Handles plain types (str, int, ...) and generic types like list[str].
+    """
     if tp in _TYPE_MAP:
         return {"type": _TYPE_MAP[tp]}
-    # Generic types like list[str]
     origin = getattr(tp, "__origin__", None)
     if origin is list:
         args = getattr(tp, "__args__", None)
@@ -62,7 +63,7 @@ def _parse_docstring(docstring):
             if m:
                 params[m.group(1)] = m.group(2).strip()
             elif stripped:
-                in_args = False  # left the Args section
+                in_args = False
 
     return description, params
 
@@ -140,10 +141,11 @@ class Tool:
         """Call the tool directly (for your code, not the LLM).
 
         Accepts a dict of arguments or keyword arguments, like execute().
+        If called from inside a running event loop, runs the coroutine in a
+        worker thread (you can't asyncio.run() from within a loop).
         """
         try:
             asyncio.get_running_loop()
-            # Already inside async code — can't asyncio.run() here.
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 return pool.submit(asyncio.run, self.execute(*args, **kwargs)).result()

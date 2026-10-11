@@ -14,8 +14,6 @@ from typing import Callable, Optional
 
 from .events import HookEvent
 
-# A hook takes an event and returns either a (possibly new) event to keep
-# going with, or None to keep the one it was given.
 HookFn = Callable[[HookEvent], Optional[HookEvent]]
 
 
@@ -26,10 +24,18 @@ class HookPipeline:
         self.hooks: list = list(hooks) if hooks else []
 
     def add(self, hook: HookFn) -> "HookPipeline":
+        """Add a hook. Returns self so calls can be chained."""
         self.hooks.append(hook)
-        return self  # allows chaining: pipeline.add(a).add(b)
+        return self
 
     def emit(self, event: HookEvent) -> HookEvent:
+        """Run every hook over the event, in order, and return the result.
+
+        A hook may return a replacement event (which becomes the new event
+        for the remaining hooks) or None (keep the current one). A hook that
+        raises is caught, logged to stderr, and skipped — it never crashes
+        the agent.
+        """
         for hook in self.hooks:
             try:
                 result = hook(event)
