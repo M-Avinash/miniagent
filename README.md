@@ -22,37 +22,29 @@ A minimal agent framework. Built with pi coding agent and a self-hosted Qwen3.8 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                      Agent                          │
-│                                                     │
-│  ┌────────────┐  ┌────────────┐  ┌──────────────┐   │
-│  │ System     │  │ Tools      │  │ Hook         │   │
-│  │ Prompt     │  │ (list)     │  │ Pipeline     │   │
-│  └────────────┘  └────────────┘  └──────────────┘   │
-│                                                     │
-│  ┌────────────────────────────────────────────────┐ │
-│  │              Agent Loop (run)                  │ │
-│  │                                                │ │
-│  │  for turn in 1..max_tool_calls+1:              │ │
-│  │    messages → LLM.chat(tools) → response       │ │
-│  │    if response.tool_calls:                     │ │
-│  │      for each tool_call:                       │ │
-│  │        hooks → execute tool → append result    │ │
-│  │      continue                                  │ │
-│  │    else:                                       │ │
-│  │      final_text = response.content; break      │ │
-│  └────────────────────────────────────────────────┘ │
-│                                                     │
-│  ┌────────────────────────────────────────────────┐ │
-│  │         Memory (bounded list)                  │ │
-│  └────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                    HandoffOrchestrator                               │
+│              (bounded by max_handoffs)                               │
+│                                                                     │
+│   ┌──────────┐        ┌──────────┐        ┌──────────┐             │
+│   │  Agent 1 │───────▶│  Agent 2 │───────▶│  Agent 3 │             │
+│   │          │handoff │          │handoff │          │             │
+│   │ • loop   │        │ • loop   │        │ • loop   │             │
+│   │ • tools  │        │ • tools  │        │ • tools  │             │
+│   │ • hooks  │        │ • hooks  │        │ • hooks  │             │
+│   │ • memory │        │ • memory │        │ • memory │             │
+│   └──────────┘        └──────────┘        └──────────┘             │
+│        │                     │                     │                │
+│        └─────────────────────┴─────────────────────┘                │
+│                              │                                      │
+│                    Shared state (dict)                               │
+└─────────────────────────────────────────────────────────────────────┘
          │
          ▼
-┌─────────────────────┐
-│    LLM Client       │  OpenAI-compatible API
-│  (swappable)        │  (OpenAI, Ollama, vLLM, llama.cpp, ...)
-└─────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                        LLM Client                                    │
+│              OpenAI-compatible API (shared by all agents)            │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Setup & Run
