@@ -58,7 +58,7 @@ A minimal agent framework. Built with pi coding agent and a self-hosted Qwen3.8 
 ## Setup & Run
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/M-Avinash/miniagent
 cd miniagent
 pip install -r requirements.txt
 
