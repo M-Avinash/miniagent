@@ -61,17 +61,21 @@ A minimal agent framework. Built with pi coding agent and a self-hosted Qwen3.8 
 git clone https://github.com/M-Avinash/miniagent
 cd miniagent
 pip install -r requirements.txt
+```
 
-# Configure (or export env vars)
-cat > config.env <<EOF
-OPENAI_API_KEY=sk-...
+Create `config.env` in the project root:
+
+```
+OPENAI_API_KEY=sk-...  # Insert your OpenAI API key here
 MINIAGENT_MODEL=gpt-5.6-luna
 MINIAGENT_TEMPERATURE=0.7
 MINIAGENT_TOOL_CHOICE=auto
 MINIAGENT_REASONING_EFFORT=none
-EOF
+```
 
-# Run the multi-agent Northwind QnA example
+Run the example:
+
+```bash
 python -m miniagent.examples.northwind_qna
 ```
 
