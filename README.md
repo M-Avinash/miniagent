@@ -57,13 +57,15 @@ A minimal agent framework. Built with pi coding agent and a self-hosted Qwen3.8 
 
 ## Setup & Run
 
+**Step 1:** Clone and install
+
 ```bash
 git clone https://github.com/M-Avinash/miniagent
 cd miniagent
 pip install -r requirements.txt
 ```
 
-Create a file called `config.env` in the root folder and save these details:
+**Step 2:** Create a file called `config.env` in the root folder and save these details:
 
 ```
 OPENAI_API_KEY=<your OpenAI API key>
@@ -73,13 +75,13 @@ MINIAGENT_TOOL_CHOICE=auto
 MINIAGENT_REASONING_EFFORT=none
 ```
 
-Run the example:
+**Step 3:** Run the example
 
 ```bash
 python -m miniagent.examples.northwind_qna
 ```
 
-## Example: Northwind QnA
+## Example: Northwind Multi-Agent Chatbot
 
 A terminal chatbot that answers natural-language questions against the SAP Northwind OData service. You type a question, it fetches live data, runs Python analysis, and returns an answer.
 
