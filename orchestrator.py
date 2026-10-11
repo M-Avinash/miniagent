@@ -29,11 +29,11 @@ Usage:
     result = orch.run("How many orders were delivered to Germany last quarter?")
 """
 
-from .tool import tool
+from .tool import Tool, tool
 from .events import EventType, AgentResult
 
 
-def make_handoff_tool(valid_targets: list = None) -> "Tool":
+def make_handoff_tool(valid_targets: list = None) -> Tool:
     """Create a handoff tool that an agent can call to hand off to another agent.
 
     Args:

@@ -1,9 +1,13 @@
-"""Northwind heartbeat — a proactive monitor that watches the data and alerts.
+"""Heartbeat showcase — a proactive monitor, demonstrated on Northwind data.
 
-This is the OpenClaw-style heartbeat applied to the Northwind use case: on
-each beat the monitor agent runs a single query (recent orders), evaluates it
-against a condition (delayed shipments / freight spikes), and either surfaces
-an alert or no-ops with HEARTBEAT_OK.
+This is a *capability showcase* for the HeartbeatAgent (the OpenClaw-style
+proactive awakener), not a feature the Northwind QnA app depends on. It shows
+the pattern: on each beat an agent runs a query, evaluates it against a
+condition, and either surfaces an alert or no-ops with HEARTBEAT_OK.
+
+Northwind is just a convenient, self-contained data source to demonstrate it
+on. A real deployment would point the monitor at something that changes over
+time (a live endpoint, a queue, an inbox) so there is new state to react to.
 
 Architecture:
   - One monitor Agent with the odata_query + analyze_data tools.
@@ -19,11 +23,10 @@ Ctrl-C, or --interval N to change the beat interval in seconds.
 
 import json
 import sys
-import time
 from datetime import datetime
 
 from . import Agent, HeartbeatAgent, verbose_log
-from .northwind_qna import odata_query, analyze_data, fetch_schema, shared_state
+from .northwind_qna import odata_query, analyze_data, fetch_schema
 
 
 def create_monitor_agent() -> Agent:

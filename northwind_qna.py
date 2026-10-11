@@ -9,12 +9,20 @@ Run it:
     python -m miniagent.northwind_qna
 
 Ask questions in the terminal. Type 'quit' to exit.
+
+Module-level state:
+  - shared_state: agents pass data to each other through this store rather than
+    through tool-call arguments (which would overflow a local model's JSON buffer).
+  - graph_memory: tracks entity keys and navigation paths across multi-turn
+    conversations, preventing context drift and key hallucination.
+  - ENTITY_KEY_MAP: entity -> key field mapping for the graph memory hook.
+  - _schema: dynamic schema (entity set -> field names) fetched from the OData
+    service at startup so the prompts always reflect the real field names.
 """
 
 import json
 import os
 import re
-import sys
 import tempfile
 
 import requests
@@ -35,25 +43,16 @@ from . import (
 
 NORTHWIND_URL = "https://services.odata.org/V4/Northwind/Northwind.svc"
 
-# Shared state: agents pass data to each other through this store, not through
-# tool-call arguments (which would overflow a local model's JSON buffer).
-shared_state = {"data": None, "data_desc": ""}
+shared_state: dict = {"data": None, "data_desc": ""}
+graph_memory: GraphMemory = GraphMemory()
 
-# Semantic graph memory: tracks entity keys and navigation paths across
-# multi-turn conversations. Prevents context drift and key hallucination.
-graph_memory = GraphMemory()
-
-# Entity -> key field mapping for the graph memory hook.
-ENTITY_KEY_MAP = {
+ENTITY_KEY_MAP: dict = {
     "Order": "OrderID",
     "Customer": "CustomerID",
     "Product": "ProductID",
     "Employee": "EmployeeID",
 }
 
-# Dynamic schema: fetched from the OData service at startup so the prompts
-# always reflect the real field names (not a hardcoded copy).
-# Maps entity set name -> list of field names.
 _schema: dict = {}
 
 
@@ -62,7 +61,6 @@ def _entity_type_for(entity_set: str) -> str:
     e.g. 'Orders' -> 'Order', 'Products' -> 'Product'.
     Falls back to the set name itself if no singular form is known.
     """
-    # Simple heuristic: strip trailing 's' for common cases.
     if entity_set.endswith("s") and not entity_set.endswith("ss"):
         return entity_set[:-1]
     return entity_set
@@ -75,7 +73,6 @@ def fetch_schema(entities: list = None) -> dict:
     Caches the result in _schema. On failure, returns the current _schema
     (possibly empty) so the caller can fall back to a hardcoded schema.
     """
-    global _schema
     if entities is None:
         entities = ["Orders", "Products", "Customers", "Employees", "Categories"]
     try:
@@ -107,7 +104,6 @@ def schema_prompt_block() -> str:
     return "\n".join(lines)
 
 
-# --------------------------------------------------------------------- tools
 @tool
 def odata_query(entity: str, filter: str = None, select: str = None,
                 top: int = None, skip: int = None, orderby: str = None,
@@ -141,12 +137,9 @@ def odata_query(entity: str, filter: str = None, select: str = None,
         resp = requests.get(url, params=params, timeout=30)
         resp.raise_for_status()
         data = resp.json()
-        # Store the full result in shared state so the analyst can use it
-        # without it passing through a tool-call argument.
         shared_state["data"] = data
         count = len(data.get("value", []))
         shared_state["data_desc"] = f"{count} records from {entity}"
-        # Return a short summary + a sample, not the full JSON (keeps context small).
         sample = data.get("value", [])[:3]
         return json.dumps({
             "status": "ok",
@@ -167,7 +160,6 @@ def odata_metadata() -> str:
         resp = requests.get(NORTHWIND_URL, timeout=30)
         resp.raise_for_status()
         data = resp.json()
-        # Return a compact list of entity sets, not the full verbose metadata.
         entities = [e.get("name") for e in data.get("EntitySets", [])]
         return json.dumps({"entity_sets": entities})
     except requests.RequestException as e:
@@ -193,20 +185,16 @@ def analyze_data(code: str, timeout: int = 30) -> str:
         return "[error: no data in shared state — call odata_query first]"
 
     data = shared_state["data"]
-    # Write the full data to a temp file so the subprocess can load it.
-    # This keeps the data out of the code string (and out of the LLM's context).
     fd, path = tempfile.mkstemp(suffix=".json")
     try:
         with os.fdopen(fd, "w") as f:
             json.dump(data, f)
-        # Prepend a loader so the generated code can use `data` directly.
         preamble = (
             "import json as _json\n"
             f"with open({path!r}) as _f:\n"
             "    data = _json.load(_f)\n"
         )
         full_code = preamble + code
-        # Reuse the sandboxed runner: subprocess + timeout, errors as strings.
         result = run_python({"code": full_code, "timeout": timeout})
     finally:
         try:
@@ -214,14 +202,12 @@ def analyze_data(code: str, timeout: int = 30) -> str:
         except OSError:
             pass
 
-    # Strip the [exit 0] marker for a cleaner return; keep error/timeout markers.
     if result.startswith("[exit 0]"):
         body = result[len("[exit 0]"):].strip()
         return body if body else "[no output — use print() to show your answer]"
     return result
 
 
-# ------------------------------------------------------------------- agents
 def create_orchestrator_agent() -> Agent:
     """The orchestrator agent — understands the question and delegates."""
     system_prompt = """You are an orchestrator for a QnA chatbot on the Northwind OData service.
@@ -249,7 +235,6 @@ The data spans 1996-1997. "Last quarter" means Q2 1997 (April-June 1997)."""
 
 def create_data_fetcher_agent() -> Agent:
     """The data fetcher agent — builds and executes OData queries."""
-    # Build the schema block dynamically (real fields from the OData service).
     schema_block = schema_prompt_block()
 
     system_prompt = f"""You are a data fetcher for the Northwind OData service.
@@ -303,7 +288,6 @@ fetched and what the analyst should compute."""
 
 def create_data_analyst_agent() -> Agent:
     """The data analyst agent — runs Python against shared data, computes the answer."""
-    # Build the schema block dynamically (real fields from the OData service).
     schema_block = schema_prompt_block()
 
     system_prompt = f"""You are a data analyst for the Northwind OData service.
@@ -338,13 +322,15 @@ Useful patterns:
 
 Do NOT set a handoff. Your answer is the final answer."""
 
-    # Self-healing: when analyze_data returns an error, count it. After 3
-    # failed attempts, set an abort so the agent stops retrying and returns
-    # whatever it has. This bounds the retry loop. `attempts` is reset at the
-    # start of each new question (see main()).
     attempts = {"count": 0}
 
     def self_heal_hook(event):
+        """Bound the self-healing retry loop.
+
+        When analyze_data returns an error, count it. After 3 failed attempts,
+        set an abort so the agent stops retrying and returns whatever it has.
+        The counter is reset at the start of each new question (see main()).
+        """
         if event.type == EventType.TOOL_RESULT and event.tool_name == "analyze_data":
             result = str(event.tool_result or "")
             if result.startswith("[error") or result.startswith("[timeout]"):
@@ -364,12 +350,10 @@ Do NOT set a handoff. Your answer is the final answer."""
         max_tool_calls=10,
     )
 
-    # Expose a reset so main() can clear the retry counter between questions.
     agent.reset_analyze_attempts = lambda: attempts.update(count=0)
     return agent
 
 
-# ------------------------------------------------------------------- main
 def main():
     print("=" * 60)
     print("Northwind OData QnA Chatbot (multi-agent)")
@@ -378,8 +362,6 @@ def main():
     print("=" * 60)
     print()
 
-    # Fetch the real schema from the OData service so the prompts use
-    # accurate, up-to-date field names (not a hardcoded copy).
     print("Fetching schema from Northwind OData service...")
     fetch_schema()
     if _schema:
@@ -389,12 +371,10 @@ def main():
         print("  (schema fetch failed — using fallback)")
     print()
 
-    # Create the agents
     orchestrator = create_orchestrator_agent()
     data_fetcher = create_data_fetcher_agent()
     data_analyst = create_data_analyst_agent()
 
-    # Create the orchestrator
     orch = HandoffOrchestrator(
         [orchestrator, data_fetcher, data_analyst],
         max_handoffs=5,
@@ -405,8 +385,6 @@ def main():
         },
     )
 
-    # Interactive loop (multi-turn: shared_state and graph_memory persist
-    # across questions so the agent can reference prior context).
     while True:
         try:
             question = input("\nYou: ").strip()
@@ -420,7 +398,6 @@ def main():
             print("Goodbye!")
             break
 
-        # 'reset' clears the conversation context (shared state + graph).
         if question.lower() == "reset":
             shared_state["data"] = None
             shared_state["data_desc"] = ""
@@ -429,11 +406,8 @@ def main():
             print("[context reset]")
             continue
 
-        # Reset the analyst's self-healing retry counter for each new question.
         data_analyst.reset_analyze_attempts()
 
-        # Show the active graph context (if any) so the user can see what
-        # the agent is tracking.
         if graph_memory.path:
             print(f"  [graph] {graph_memory.focus_path()}")
 
