@@ -131,17 +131,3 @@ See [`Northwind_test_questions.md`](examples/Northwind_test_questions.md) for te
 - Python 3.10+
 - See `requirements.txt`
 
-## Configuration
-
-Resolution order: constructor arg > env / `config.env` > default.
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OPENAI_API_KEY` | `dummy` | API key |
-| `OPENAI_BASE_URL` | — | Base URL (set for local servers) |
-| `MINIAGENT_MODEL` | `gpt-5.6-luna` | Model name |
-| `MINIAGENT_TEMPERATURE` | `0.7` | Sampling temperature |
-| `MINIAGENT_MAX_TOKENS` | — | Max tokens per call (needed for local models) |
-| `MINIAGENT_TOOL_CHOICE` | `auto` | `auto` or `required` |
-| `MINIAGENT_REASONING_EFFORT` | — | Set `none` for reasoning models |
-| `MINIAGENT_MAX_RETRIES` | `3` | Retries on 429 |
