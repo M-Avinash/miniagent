@@ -57,7 +57,7 @@ cd miniagent
 pip install -r requirements.txt
 ```
 
-**Step 2:** Create a file called `config.env` in the root folder and save these details:
+**Step 2:** Create a file called `config.env` in the `miniagent` folder and save these details:
 
 ```
 OPENAI_API_KEY=<your OpenAI API key>
@@ -70,7 +70,7 @@ MINIAGENT_REASONING_EFFORT=none
 **Step 3:** Run the example
 
 ```bash
-python -m miniagent.examples.northwind_qna
+python examples/northwind_qna.py
 ```
 
 ## Example: Northwind Multi-Agent Chatbot

@@ -23,7 +23,11 @@ Module-level state:
 import json
 import os
 import re
+import sys
 import tempfile
+
+# Allow running from inside the miniagent folder: python examples/northwind_qna.py
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
 import requests
 
