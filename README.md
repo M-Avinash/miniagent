@@ -109,27 +109,21 @@ Orchestrator ──handoff──▶ Data Fetcher ──handoff──▶ Data Ana
 
 **Multi-turn:** `shared_state` and `GraphMemory` persist across questions in a session. You can ask follow-ups ("of those, how many had freight over 100?") without re-fetching. Type `reset` to clear context, `quit` to exit.
 
-```bash
-python -m miniagent.examples.northwind_qna
+```
+You: How many orders were shipped to Germany in Q2 1997, and how many were
+     delivered within 3 weeks of the order date?
 
-You: How many orders were shipped to Germany in Q2 1997?
-[16:19:52] [orchestrator] START: How many orders were shipped to Germany in Q2 1997?
-[16:19:54] [orchestrator] TOOL: handoff({'target_agent': 'data_fetcher'})
-[16:19:54] [data_fetcher] START: Previous agent result: [handoff: data_fetcher]...
-[16:19:56] [data_fetcher] TOOL: odata_query({'entity': 'Orders', 'filter': "ShipCountry eq 'Germany' and OrderDate ge 1997-04-01T00:00:00Z and OrderDate lt 1997-07-01T00:00:00Z"})
-[16:19:57] [data_fetcher] RESULT: {"status": "ok", "count": 20, ...}
-[16:19:58] [data_fetcher] TOOL: handoff({'target_agent': 'data_analyst'})
-[16:19:58] [data_analyst] TOOL: analyze_data({'code': "from datetime import datetime..."})
-[16:19:59] [data_analyst] RESULT: 20 orders in Q2 1997 to Germany. 16 within 3 weeks, 4 longer.
+[23:27:48] [orchestrator] START: How many orders were shipped to Germany in Q2 1997...
+[23:27:51] [orchestrator] TOOL: handoff({'target_agent': 'data_fetcher'})
+[23:27:53] [data_fetcher] TOOL: odata_query({'entity': 'Orders', 'filter': "ShipCountry eq 'Germany' and OrderDate ge 1997-04-01T00:00:00Z and OrderDate lt 1997-07-01T00:00:00Z"})
+[23:27:54] [data_fetcher] RESULT: {"status": "ok", "count": 21, ...}
+[23:27:55] [data_fetcher] TOOL: handoff({'target_agent': 'data_analyst'})
+[23:27:57] [data_analyst] TOOL: analyze_data({'code': "from datetime import datetime..."})
+[23:27:57] [data_analyst] RESULT: {'orders_shipped_to_germany_q2_1997': 21, 'delivered_within_3_weeks': 17}
 
-Answer: 20 orders were shipped to Germany in Q2 1997. 16 were delivered within
-        3 weeks; 4 took longer.
+Answer: In Q2 1997, 21 orders were shipped to Germany. Of these, 17 were
+        delivered within 3 weeks of the order date.
 ```
 
 See [`Northwind_test_questions.md`](examples/Northwind_test_questions.md) for test questions.
-
-## Requirements
-
-- Python 3.10+
-- See `requirements.txt`
 
