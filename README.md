@@ -73,7 +73,10 @@ MINIAGENT_REASONING_EFFORT=none
 python examples/northwind_qna.py
 ```
 
-**Step 4:** You're now in the chatbot. Type a question and press Enter. You can ask single-turn or multi-turn questions — example questions are in [`Northwind_test_questions.md`](examples/Northwind_test_questions.md). Type `reset` to clear context, `quit` to exit.
+**Step 4:** You're now in the chatbot. Type a question and press Enter. 
+You can ask single-turn or multi-turn questions — Type `reset` to clear context, `quit` to exit.
+
+Example questions are in [`Northwind_test_questions.md`](examples/Northwind_test_questions.md).
 
 ## Example: Northwind Multi-Agent Chatbot
 
