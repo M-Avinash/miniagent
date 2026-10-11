@@ -14,7 +14,7 @@ A small agent framework built from scratch with **pi coding agent** and a **self
 4. **Memory** — three complementary types: **working** (the conversation window), **episodic** (long-term observational memory, JSONL store), and **procedural/semantic** (a graph of entity keys for relational schemas).
 5. **Structured output** — JSON extraction + field validation, with no Pydantic dependency.
 6. **Guardrails & hooks** — middleware-style interceptors at every event for logging, guardrails, abort, and self-healing.
-7. **Orchestration runtime** — a **handoff** mechanism (handoff tool + hook + `HandoffOrchestrator`) for supervisor-worker / multi-agent chains, plus a **proactive heartbeat** (OpenClaw-style awakener with `HEARTBEAT_OK` no-ops and an `on_alert` callback, and an optional maker-checker mode).
+7. **Orchestration runtime** — a **handoff** mechanism (handoff tool + hook + `HandoffOrchestrator`) for supervisor-worker / multi-agent chains.
 8. **Observability** — a `verbose_log` hook that emits labeled event spans per agent.
 
 ## Architecture
@@ -56,7 +56,7 @@ A small agent framework built from scratch with **pi coding agent** and a **self
 ### Key design decisions
 
 **1. The ReAct loop is the spine — one loop, one source of truth.**
-`agent.py` implements the standard **ReAct** pattern: the model reasons, calls a tool, observes the result, and repeats until it produces a final answer. It is the *only* tool-calling loop in the framework — the heartbeat, orchestrator, and any future code all call `agent.run()`. The loop carries the termination policy (bounded by `max_tool_calls`) and fires hooks at every step, so crash-safety, guardrails, and observability all hang off one place. When you need *multiple* agents, the handoff orchestrator is just a loop over `agent.run()` calls (see below).
+`agent.py` implements the standard **ReAct** pattern: the model reasons, calls a tool, observes the result, and repeats until it produces a final answer. It is the *only* tool-calling loop in the framework — the orchestrator and any future code all call `agent.run()`. The loop carries the termination policy (bounded by `max_tool_calls`) and fires hooks at every step, so crash-safety, guardrails, and observability all hang off one place. When you need *multiple* agents, the handoff orchestrator is just a loop over `agent.run()` calls (see below).
 
 **2. The `@tool` decorator does the heavy lifting.**
 A Python function with type hints and a docstring becomes a fully-specified tool. The framework introspects the signature to build the JSON schema, parses the docstring for parameter descriptions, and handles sync/async execution. Defining a tool is as simple as writing a function.
@@ -168,32 +168,6 @@ def guardrail(event):
 
 agent = Agent("...", hooks=[guardrail])
 ```
-
-### Heartbeat (proactive awakener + maker-checker)
-
-A `HeartbeatAgent` wakes an agent on an interval — the OpenClaw-style pattern that turns a reactive chatbot into a **proactive agent** that works while you are away. It is not a new loop: it is a plain while-loop with a sleep that keeps calling the existing `agent.run()`.
-
-**Proactive awakener (default).** The heartbeat sends a "check for pending work" prompt. The agent runs its tools, and if nothing needs attention it replies `HEARTBEAT_OK` — a no-op that is suppressed. Only when the agent surfaces something does an alert fire. Wire up delivery with the `on_alert` callback:
-
-```python
-from miniagent import Agent, HeartbeatAgent, HEARTBEAT_OK
-
-monitor = Agent(
-    "On each heartbeat, check recent orders for delays. If any, alert. "
-    "Otherwise reply with exactly HEARTBEAT_OK.",
-    tools=[odata_query, analyze_data],
-)
-
-def on_alert(result):
-    print("ALERT:", result.text)
-
-hb = HeartbeatAgent(monitor, interval=300, on_alert=on_alert)
-hb.run_forever()  # or hb.run(n_times=5) for a bounded demo
-```
-
-**Maker-checker (optional).** Pass a `checker` agent and the heartbeat keeps beating until the checker reports the task is done — a convergence loop rather than an awakener.
-
-See [`northwind_heartbeat.py`](northwind_heartbeat.py) for a runnable showcase: a monitor that queries the Northwind data for delayed shipments and freight spikes, no-ops with `HEARTBEAT_OK` when all is normal, and writes alerts to `alerts.jsonl`. (Northwind is just a convenient, self-contained data source for the demo — a real deployment would point the monitor at something that changes over time.)
 
 ### Sandbox
 
@@ -327,7 +301,7 @@ Answer: 20 orders were shipped to Germany in Q2 1997. 16 were delivered within
         3 weeks; 4 took longer.
 ```
 
-Every step streams to the terminal (via `verbose_log`), labeled by agent. See [`NORTHWIND_TEST_QUESTIONS.md`](NORTHWIND_TEST_QUESTIONS.md) for 10 questions that stress-test joins, date math, and grouping.
+Every step streams to the terminal (via `verbose_log`), labeled by agent. See [`Northwind_test_questions.md`](examples/Northwind_test_questions.md) for questions that stress-test joins, date math, grouping, and multi-turn follow-ups.
 
 The chatbot is **multi-turn**: `shared_state` and `GraphMemory` persist across questions, so the agent can reference prior context ("which of *those* were delayed?"). Type `reset` to clear the context.
 
@@ -374,15 +348,14 @@ miniagent/
 ├── hooks.py             # Hook pipeline
 ├── structured.py        # Structured output (JSON extraction + validation)
 ├── events.py            # EventType, HookEvent, AgentResult
-├── heartbeat.py         # HeartbeatAgent (proactive awakener + maker-checker)
 ├── sandbox.py           # run_python tool (subprocess execution)
 ├── observe.py           # verbose_log hook
 ├── observation.py       # ObservationalMemory (long-term distilled JSONL store)
 ├── orchestrator.py      # HandoffOrchestrator + make_handoff_tool + handoff_hook
 ├── graph_memory.py      # GraphMemory + hooks (semantic graph memory for relational schemas)
-├── northwind_qna.py     # Example: multi-agent OData QnA chatbot
-├── northwind_heartbeat.py  # Showcase: HeartbeatAgent demonstrated on Northwind data
-├── NORTHWIND_TEST_QUESTIONS.md  # Test questions for the Northwind example
+├── examples/
+│   ├── northwind_qna.py           # Example: multi-agent OData QnA chatbot
+│   └── Northwind_test_questions.md  # Test questions for the Northwind example
 ├── config.env           # Local config (gitignored)
 └── .env.example         # Config template
 ```
