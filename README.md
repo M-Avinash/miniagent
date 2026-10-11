@@ -122,30 +122,6 @@ Answer: 20 orders were shipped to Germany in Q2 1997. 16 were delivered within
 
 See [`Northwind_test_questions.md`](examples/Northwind_test_questions.md) for test questions.
 
-## Project Structure
-
-```
-miniagent/
-├── __init__.py
-├── agent.py
-├── llm.py
-├── tool.py
-├── memory.py
-├── hooks.py
-├── structured.py
-├── events.py
-├── sandbox.py
-├── observe.py
-├── observation.py
-├── orchestrator.py
-├── graph_memory.py
-├── examples/
-│   ├── northwind_qna.py
-│   └── Northwind_test_questions.md
-├── config.env          # gitignored
-└── .env.example
-```
-
 ## Requirements
 
 - Python 3.10+
