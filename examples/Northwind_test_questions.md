@@ -35,8 +35,6 @@ multi-step analysis, and multi-turn follow-ups.
 9. **Multi-entity cross (customers + countries + orders)**
    > Which country has the most customers, and for that country, what is the total number of orders placed by its customers in 1997?
 
-10. **Compound business metric**
-    > For the top 10 most expensive products, how many of them had any orders in 1997, and what was the total revenue from those orders?
 
 ## Multi-turn follow-up sequences
 
@@ -53,16 +51,12 @@ Ask these in order (the shared state persists between turns):
 2. Of those, how many were shipped to France?
 3. What was the average freight for French orders in Q2 1997?
 
-**Sequence C — Product investigation**
-1. How many products are in the Beverages category?
-2. Which of those has the highest unit price?
-3. How many orders included that product?
 
 ## Notes
 
-- **Joins** (questions 4, 7, 9, 10) are the hardest — the agent must reconcile
-  two datasets on IDs. If it struggles, nudge it: *"Use the ProductID/CategoryID
-  to join them."*
+- **Joins** (questions 4, 7, 9) require the agent to reconcile two datasets on
+  IDs. The agent fetches each entity in separate calls; only the last fetch
+  persists in shared state, so the analyst works with one dataset at a time.
 - **Date math** (questions 1, 6, 8) stress-tests the `analyze_data` tool on
   large result sets.
 - **Multi-turn** sequences test that `shared_state` persists and the analyst

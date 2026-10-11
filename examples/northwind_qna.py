@@ -74,7 +74,7 @@ def fetch_schema(entities: list = None) -> dict:
     (possibly empty) so the caller can fall back to a hardcoded schema.
     """
     if entities is None:
-        entities = ["Orders", "Products", "Customers", "Employees", "Categories"]
+        entities = ["Orders", "Products", "Customers", "Employees", "Categories", "Order_Details"]
     try:
         resp = requests.get(f"{NORTHWIND_URL}/$metadata", timeout=30)
         resp.raise_for_status()
@@ -244,6 +244,14 @@ Your job:
 2. Build the correct OData query and call odata_query.
 3. odata_query stores the FULL result in shared state and returns a summary.
    Fetch the FULL entity (do not use $select) so the analyst has every field.
+4. IMPORTANT: Do NOT put numeric equality filters (e.g. UnitsInStock eq 0,
+   Freight gt 100) in the OData $filter. The service is unreliable with these.
+   Instead, fetch the entity with only broad filters (category, date range,
+   country) and let the analyst do all numeric/comparative filtering in Python.
+5. If the question needs data from multiple entities (e.g. Products AND
+   Order_Details), fetch them in separate odata_query calls. The last call
+   overwrites shared state, so fetch the primary entity LAST and note in your
+   handoff context what was fetched.
 
 OData $filter syntax:
 - String compare: ShipCountry eq 'Germany'
