@@ -7,7 +7,6 @@ Public API:
     Agent, LLMClient, Memory, Tool, tool
     HookEvent, HookFn, HookPipeline, EventType, AgentResult
     build_structured_prompt, extract_json, parse_structured
-    HeartbeatAgent, HEARTBEAT_OK
     run_python
     verbose_log
     ObservationalMemory
@@ -20,7 +19,6 @@ from .memory import Memory
 from .tool import Tool, tool
 from .agent import Agent
 from .structured import build_structured_prompt, extract_json, parse_structured
-from .heartbeat import HeartbeatAgent, HEARTBEAT_OK
 from .sandbox import run_python
 from .observe import verbose_log
 from .observation import ObservationalMemory
@@ -31,7 +29,6 @@ __all__ = [
     "Agent", "LLMClient", "Memory", "Tool", "tool",
     "HookEvent", "HookFn", "HookPipeline", "EventType", "AgentResult",
     "build_structured_prompt", "extract_json", "parse_structured",
-    "HeartbeatAgent", "HEARTBEAT_OK",
     "run_python",
     "verbose_log",
     "ObservationalMemory",

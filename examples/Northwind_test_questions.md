@@ -1,12 +1,12 @@
 # Northwind QnA — Test Questions
 
-Complex questions to stress-test the multi-agent Northwind chatbot
+Questions to exercise the multi-agent Northwind chatbot
 (`python -m miniagent.northwind_qna`).
 
-They cover multi-condition filters, date arithmetic, joins, grouping, and
-multi-step analysis.
+They cover multi-condition filters, date arithmetic, joins, grouping,
+multi-step analysis, and multi-turn follow-ups.
 
-## Questions
+## Single-shot questions
 
 1. **Multi-condition + date math**
    > How many orders were shipped to Germany in Q2 1997, how many were delivered within 3 weeks of the order date, and which ones took longer?
@@ -38,6 +38,26 @@ multi-step analysis.
 10. **Compound business metric**
     > For the top 10 most expensive products, how many of them had any orders in 1997, and what was the total revenue from those orders?
 
+## Multi-turn follow-up sequences
+
+Ask these in order (the shared state persists between turns):
+
+**Sequence A — Drill down on Germany**
+1. How many orders were delivered to Germany?
+2. Of those, how many had freight over 100?
+3. What was the total freight for all German orders?
+4. Which German customer had the highest total freight?
+
+**Sequence B — Time-based drill**
+1. How many orders were placed in Q2 1997?
+2. Of those, how many were shipped to France?
+3. What was the average freight for French orders in Q2 1997?
+
+**Sequence C — Product investigation**
+1. How many products are in the Beverages category?
+2. Which of those has the highest unit price?
+3. How many orders included that product?
+
 ## Notes
 
 - **Joins** (questions 4, 7, 9, 10) are the hardest — the agent must reconcile
@@ -45,13 +65,16 @@ multi-step analysis.
   to join them."*
 - **Date math** (questions 1, 6, 8) stress-tests the `analyze_data` tool on
   large result sets.
+- **Multi-turn** sequences test that `shared_state` persists and the analyst
+  can re-query the same data with different Python code.
 - "1997" is unambiguous; "last quarter" maps to Q2 1997 per the system prompt.
+- Type `reset` between unrelated sequences to clear shared state.
 
 ## How to run
 
 ```bash
 cd ~/Documents/Avi-Work
-python -m miniagent.northwind_qna
+python -m miniagent.examples.northwind_qna
 ```
 
-Paste one question at a time. `quit`/`exit`/`q` or Ctrl-C to stop.
+Paste one question at a time. `quit`/`exit`/`q` or Ctrl-C to stop. `reset` clears context.

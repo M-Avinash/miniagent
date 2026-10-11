@@ -27,7 +27,7 @@ import tempfile
 
 import requests
 
-from . import (
+from miniagent import (
     Agent,
     tool,
     HandoffOrchestrator,
