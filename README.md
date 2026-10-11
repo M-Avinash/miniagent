@@ -63,10 +63,10 @@ cd miniagent
 pip install -r requirements.txt
 ```
 
-Create `config.env` in the project root:
+Create a file called `config.env` in the root folder and save these details:
 
 ```
-OPENAI_API_KEY=sk-...  # Insert your OpenAI API key here
+OPENAI_API_KEY=<your OpenAI API key>
 MINIAGENT_MODEL=gpt-5.6-luna
 MINIAGENT_TEMPERATURE=0.7
 MINIAGENT_TOOL_CHOICE=auto
