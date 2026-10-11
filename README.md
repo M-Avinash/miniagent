@@ -56,7 +56,7 @@ A small agent framework built from scratch with **pi coding agent** and a **self
 ### Key design decisions
 
 **1. The ReAct loop is the spine — one loop, one source of truth.**
-`agent.py` implements the standard **ReAct** pattern: the model reasons, calls a tool, observes the result, and repeats until it produces a final answer. It is the *only* tool-calling loop in the framework — the playground, heartbeat, orchestrator, and any future code all call `agent.run()`. The loop carries the termination policy (bounded by `max_tool_calls`) and fires hooks at every step, so crash-safety, guardrails, and observability all hang off one place. When you need *multiple* agents, the handoff orchestrator is just a loop over `agent.run()` calls (see below).
+`agent.py` implements the standard **ReAct** pattern: the model reasons, calls a tool, observes the result, and repeats until it produces a final answer. It is the *only* tool-calling loop in the framework — the heartbeat, orchestrator, and any future code all call `agent.run()`. The loop carries the termination policy (bounded by `max_tool_calls`) and fires hooks at every step, so crash-safety, guardrails, and observability all hang off one place. When you need *multiple* agents, the handoff orchestrator is just a loop over `agent.run()` calls (see below).
 
 **2. The `@tool` decorator does the heavy lifting.**
 A Python function with type hints and a docstring becomes a fully-specified tool. The framework introspects the signature to build the JSON schema, parses the docstring for parameter descriptions, and handles sync/async execution. Defining a tool is as simple as writing a function.
@@ -113,10 +113,10 @@ MINIAGENT_TOOL_CHOICE=required
 EOF
 ```
 
-Then run the playground:
+Verify the setup with a one-line smoke test:
 
 ```bash
-python3 -u miniagent/playground.py
+python3 -c "from miniagent import LLMClient; print(LLMClient().chat([{'role':'user','content':'Reply OK'}]).choices[0].message.content)"
 ```
 
 ## Defining Your Own Agent
@@ -366,8 +366,8 @@ miniagent/
 ├── observation.py       # ObservationalMemory (long-term distilled JSONL store)
 ├── orchestrator.py      # HandoffOrchestrator + make_handoff_tool + handoff_hook
 ├── graph_memory.py      # GraphMemory + hooks (semantic graph memory for relational schemas)
-├── playground.py        # Interactive driving range
 ├── northwind_qna.py     # Example: multi-agent OData QnA chatbot
+├── northwind_heartbeat.py  # Example: proactive heartbeat monitor (OpenClaw-style)
 ├── NORTHWIND_TEST_QUESTIONS.md  # Test questions for the Northwind example
 ├── config.env           # Local config (gitignored)
 └── .env.example         # Config template
