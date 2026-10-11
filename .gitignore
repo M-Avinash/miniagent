@@ -11,5 +11,8 @@ __pycache__/
 observations.jsonl
 audit.log
 
+# tests
+tests/
+
 # working examples (scratch / demo code, not part of the package)
 working-examples/
