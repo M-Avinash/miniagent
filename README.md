@@ -187,7 +187,7 @@ https://services.odata.org/V4/Northwind/Northwind.svc/Orders?$filter=ShipCountry
 
 ## Development and Validation Approach
 
-**Coding agent used:** Pi coding agent (model: Qwen 3.8 27b)
+**Coding agent used:** Pi coding agent with a self-hosted Qwen3.8 27B LLM (llama.cpp, RTX 3090)
 
 I worked with the coding agent as a pair programmer. I designed the architecture first (module layout, agentic loop, handoff mechanism), and then the LLM implemented each piece, which I reviewed. I validated each module with unit tests as we went, which also tied the different parts of the framework together.
 
