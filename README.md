@@ -1,6 +1,6 @@
 # miniagent
 
-A minimal agent framework. Built with **Pi coding agent** and a self-hosted **Qwen3.8 27B LLM (llama.cpp, RTX 3090)**. The agentic loop lives in `agent.py`; everything else is a tool, a hook, or a wrapper. Runs on any OpenAI-compatible API. Scales from single agent to multi-agent handoff chains.
+A minimal agent framework. Built with **Pi coding agent** and a self-hosted **Qwen3.8 27B LLM (llama.cpp, RTX 3090)**. The agentic loop lives in `agent.py`; everything else is a tool, a hook, or a wrapper. Runs on any **OpenAI-compatible API**. Scales from single agent to multi-agent handoff chains.
 
 ## Modules
 
@@ -183,7 +183,7 @@ https://services.odata.org/V4/Northwind/Northwind.svc/Orders?$filter=ShipCountry
 - **Code execution instead of reasoning over raw data.** The analyst writes Python that runs in a sandboxed subprocess with a timeout. This is more accurate than asking the model to read rows, and errors come back as strings so the agent can self-correct.
 - **Shared state instead of passing data through tool arguments.** Fetched datasets live in a dict that agents read directly, which avoids pushing large JSON through the context window.
 - **Multi-agent handoffs with single-job agents.** Narrow tools and prompts per agent make routing explicit and each step easier to test.
-- **Provider-agnostic.** Any OpenAI-compatible endpoint works, so the framework isn't tied to one vendor or to a local or hosted model.
+- **Provider-agnostic.** Any **OpenAI-compatible** endpoint works, so the framework isn't tied to one vendor or to a local or hosted model.
 
 ## Development and Validation Approach
 
