@@ -77,6 +77,35 @@ python examples/northwind_qna.py
 
 Example questions are in [`Northwind_test_questions.md`](examples/Northwind_test_questions.md).
 
+## Build Your Own Agent
+
+An agent is an LLM client, a set of tools, and optional hooks. Tools are plain Python functions; the `@tool` decorator turns type hints and the docstring into a JSON schema.
+
+```python
+from miniagent.agent import Agent
+from miniagent.llm import LLMClient
+from miniagent.tool import tool
+from miniagent.observe import verbose_log
+
+@tool
+def get_weather(city: str) -> str:
+    """Return the current weather for a city."""
+    return f"Sunny in {city}"
+
+agent = Agent(
+    name="weather_bot",
+    llm=LLMClient(),
+    system_prompt="You answer weather questions using your tools.",
+    tools=[get_weather],
+    hooks=[verbose_log("weather_bot")],
+    max_tool_calls=5,
+)
+
+print(agent.run("What's the weather in Bengaluru?"))
+```
+
+For multi-agent chains, give each agent a `make_handoff_tool(...)` and run them with `HandoffOrchestrator`. See `examples/northwind_qna.py` for a full three-agent example.
+
 ## Example: Northwind Multi-Agent Chatbot
 
 A terminal chatbot that answers natural-language questions against the SAP Northwind OData service. You type a question, it fetches live data, runs Python analysis, and returns an answer.
@@ -147,7 +176,18 @@ https://services.odata.org/V4/Northwind/Northwind.svc/Orders
 https://services.odata.org/V4/Northwind/Northwind.svc/Orders?$filter=ShipCountry%20eq%20%27Germany%27
 ```
 
+## Design Choices and Rationale
+
+- **Minimal loop, everything else is a hook.** The reason → act → observe loop in `agent.py` stays small. Logging, entity tracking, self-healing and routing are all hooks, so behavior can be changed without touching the core.
+- **Layered memory.** Each layer solves a different problem: a bounded window within a run, observational memory (distilled summaries) across runs, and graph memory for the records currently in scope.
+- **Code execution instead of reasoning over raw data.** The analyst writes Python that runs in a sandboxed subprocess with a timeout. This is more accurate than asking the model to read rows, and errors come back as strings so the agent can self-correct.
+- **Shared state instead of passing data through tool arguments.** Fetched datasets live in a dict that agents read directly, which avoids pushing large JSON through the context window.
+- **Multi-agent handoffs with single-job agents.** Narrow tools and prompts per agent make routing explicit and each step easier to test.
+- **Provider-agnostic.** Any OpenAI-compatible endpoint works, so the framework isn't tied to one vendor or to a local or hosted model.
+
 ## Development and Validation Approach
+
+**Coding agent used:** Pi coding agent (model: Qwen 3.8 27b)
 
 I worked with the coding agent as a pair programmer. I designed the architecture first (module layout, agentic loop, handoff mechanism), and then the LLM implemented each piece, which I reviewed. I validated each module with unit tests as we went, which also tied the different parts of the framework together.
 
