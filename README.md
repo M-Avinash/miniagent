@@ -136,7 +136,7 @@ https://services.odata.org/V4/Northwind/Northwind.svc
 - **Version:** OData V4
 - **Entities:** Orders (200), Products (20), Customers (20), Employees (9), Categories (8), Order_Details (196)
 - **Date range:** Orders span July 1996 to February 1997
-- **Notes:** This is a public demo service. The service is read-only in practice but is shared — data may change if SAP resets or updates the demo. The service returns different datasets depending on the `$filter` applied, so the example fetches full entities and filters in Python.
+- **Notes:** This is a public demo service. The service is read-only in practice but is shared — data may change if SAP resets or updates the demo. The example fetches full entities and filters in Python.
 
 To cross-check any answer, query the service directly:
 
