@@ -82,6 +82,9 @@ Example questions are in [`Northwind_test_questions.md`](examples/Northwind_test
 An agent is an LLM client, a set of tools, and optional hooks. Tools are plain Python functions; the `@tool` decorator turns type hints and the docstring into a JSON schema.
 
 ```python
+import sys, os
+sys.path.insert(0, os.path.abspath(".."))  # add repo root to path
+
 from miniagent.agent import Agent
 from miniagent.llm import LLMClient
 from miniagent.tool import tool
