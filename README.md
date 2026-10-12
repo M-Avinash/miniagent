@@ -85,7 +85,7 @@ Run this from inside the cloned `miniagent` folder (the repo folder must be name
 
 ```python
 import sys, os
-sys.path.insert(0, os.path.abspath(".."))  # add repo root to path
+sys.path.insert(0, os.path.abspath(".."))
 
 from miniagent.agent import Agent
 from miniagent.llm import LLMClient
