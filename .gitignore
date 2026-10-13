@@ -16,3 +16,4 @@ tests/
 
 # working examples (scratch / demo code, not part of the package)
 working-examples/
+FUTURE_UPGRADES.md
