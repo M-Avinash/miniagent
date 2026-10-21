@@ -1,0 +1,96 @@
+{
+  "service": "https://services.odata.org/V4/Northwind/Northwind.svc",
+  "verified_at": "2026-07-09",
+  "record_counts": {
+    "Orders": 200,
+    "Products": 20,
+    "Customers": 20,
+    "Employees": 9,
+    "Categories": 8,
+    "Order_Details": 500
+  },
+  "date_range": {
+    "orders": "1996-07-04 to 1997-02-14",
+    "by_year": {"1996": 152, "1997": 48},
+    "q1_1997": 48
+  },
+  "single_shot": {
+    "q1_germany_q1_1997": {
+      "count": 4,
+      "within_3_weeks": 3,
+      "longer": [{"order_id": 10407, "ordered": "1997-01-07", "shipped": "1997-01-30", "days": 23}]
+    },
+    "q2_most_orders_1997": {
+      "country": "Brazil",
+      "count": 6,
+      "avg_freight": 61.00
+    },
+    "q3_freight_over_100_h1_1997": {
+      "count": 6,
+      "total_freight": 1387.41
+    },
+    "q4_category_inventory": {
+      "by_category": {
+        "Condiments": 5140.50,
+        "Confections": 3976.05,
+        "Seafood": 3730.00,
+        "Dairy Products": 3730.00,
+        "Meat/Poultry": 2813.00,
+        "Produce": 1263.75,
+        "Beverages": 1025.00
+      },
+      "highest": "Condiments"
+    },
+    "q5_top_customers_1997": [
+      {"id": "ERNSH", "name": "Ernst Handel", "count": 4},
+      {"id": "BOTTM", "name": "Bottom-Dollar Markets", "count": 3},
+      {"id": "WARTH", "name": "Unknown", "count": 3},
+      {"id": "LAMAI", "name": "Unknown", "count": 2},
+      {"id": "MEREP", "name": "Unknown", "count": 2}
+    ],
+    "q6_late_shipments_1997": {
+      "count": 2,
+      "worst": [
+        {"order_id": 10423, "days_late": 18, "customer": "GOURL"},
+        {"order_id": 10427, "days_late": 7, "customer": "PICCO"}
+      ]
+    },
+    "q7_beverages_out_of_stock": {
+      "count": 0,
+      "total_beverages": 2
+    },
+    "q8_median_ship_gap_1997": {
+      "median_days": 7.5,
+      "under_a_week": 18,
+      "orders_with_ship_date": 48
+    },
+    "q9_most_customers_country": {
+      "country": "UK",
+      "customer_count": 4,
+      "orders_1997": 2
+    }
+  },
+  "sequences": {
+    "A_germany": {
+      "q1_total": 28,
+      "q2_over_100": 8,
+      "q3_total_freight": 2089.09,
+      "q4_highest_customer": {"id": "QUICK", "freight": 833.88}
+    },
+    "B_q1_1997": {
+      "q1_total": 48,
+      "q2_france": 4,
+      "q3_avg_freight_france": {"value": 67.88, "orders": 4}
+    },
+    "C_freight_1997": {
+      "q1_total": 2846.46,
+      "q2_usa": {"freight": 176.60, "pct": 6.2},
+      "q3_highest": {"freight": 458.78, "customer": "ERNSH", "order": 10430}
+    },
+    "D_product_inventory": {
+      "q1_total": 21678.30,
+      "q2_above_2000": 5,
+      "q3_highest": {"name": "Queso Manchego La Pastora", "value": 3268.00}
+    }
+  }
+}

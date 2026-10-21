@@ -1,7 +1,7 @@
 # Northwind QnA — Test Questions
 
 Questions to exercise the multi-agent Northwind chatbot
-(`python examples/northwind_qna.py`).
+(`python -m miniagent.examples.northwind.app`).
 
 Data: 200 orders (July 1996 – February 1997), 20 products, 20 customers,
 9 employees, 8 categories. Read-only OData service.

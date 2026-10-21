@@ -11,9 +11,10 @@ __pycache__/
 observations.jsonl
 audit.log
 
-# tests
-tests/
 
 # working examples (scratch / demo code, not part of the package)
 working-examples/
+
+# roadmap / planning docs
 FUTURE_UPGRADES.md
+STRUCTURAL_OVERHAUL.md

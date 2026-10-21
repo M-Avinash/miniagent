@@ -12,7 +12,7 @@ flag after each emit().
 import sys
 from typing import Callable, Optional
 
-from .events import HookEvent
+from .events import EventType, HookEvent
 
 HookFn = Callable[[HookEvent], Optional[HookEvent]]
 
@@ -46,3 +46,17 @@ class HookPipeline:
             if result is not None:
                 event = result
         return event
+
+
+def handoff_hook(event):
+    """Hook that reads a handoff tool call and sets event.data['handoff'].
+
+    Attach this to an agent's hooks. When the agent calls the handoff tool,
+    this hook sets event.data['handoff'] to the target agent name and aborts
+    the agent's run (so the orchestrator can route to the next agent).
+    """
+    if event.type == EventType.TOOL_CALL and event.tool_name == "handoff":
+        event.data["handoff"] = event.tool_args.get("target_agent")
+        event.data["abort"] = True
+        event.data["abort_reason"] = f"handoff to {event.data['handoff']}"
+    return event

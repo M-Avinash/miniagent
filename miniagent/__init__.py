@@ -13,20 +13,25 @@ Public API:
 """
 
 from .events import AgentResult, EventType, HookEvent
-from .hooks import HookFn, HookPipeline
+from .hooks import HookFn, HookPipeline, handoff_hook
 from .llm import LLMClient
 from .memory import Memory
-from .tool import Tool, tool
-from .agent import Agent
+from .tool import Tool, tool, make_handoff_tool
+from .agent import Agent, fan_out, make_supervisor_tool
 from .structured import build_structured_prompt, extract_json, parse_structured
 from .sandbox import run_python
 from .observe import verbose_log
 from .observation import ObservationalMemory
-from .orchestrator import HandoffOrchestrator, make_handoff_tool, handoff_hook
+from .orchestrator import (
+    HandoffOrchestrator,
+    make_handoff_marker, parse_handoff,
+    make_abort_marker, parse_abort,
+)
 from .graph_memory import GraphMemory, graph_memory_hook, graph_injection_hook
 
 __all__ = [
     "Agent", "LLMClient", "Memory", "Tool", "tool",
+    "fan_out", "make_supervisor_tool",
     "HookEvent", "HookFn", "HookPipeline", "EventType", "AgentResult",
     "build_structured_prompt", "extract_json", "parse_structured",
     "run_python",
@@ -38,4 +43,6 @@ __all__ = [
     "GraphMemory",
     "graph_memory_hook",
     "graph_injection_hook",
+    "make_handoff_marker", "parse_handoff",
+    "make_abort_marker", "parse_abort",
 ]

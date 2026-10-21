@@ -9,20 +9,41 @@ OpenAI setup: just export OPENAI_API_KEY — no config file needed.
 
 import os
 import time
+from typing import Generator
 
 from openai import OpenAI, RateLimitError
 
-_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.env")
+def _find_config():
+    """Look for config.env in: package dir, repo root (parent), cwd."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for candidate in (
+        os.path.join(here, "config.env"),
+        os.path.join(os.path.dirname(here), "config.env"),
+        os.path.join(os.getcwd(), "config.env"),
+    ):
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
+_CONFIG_PATH = _find_config()
 
 _RETRY_DELAYS = [2, 5, 15]   # seconds to wait before each retry on a 429
+
+_config_loaded = False
 
 
 def _load_config():
     """Load KEY=VALUE lines from config.env into the environment.
 
     Real environment variables always win (setdefault).
+    Only loads once (module-level cache).
     """
+    global _config_loaded
+    if _config_loaded:
+        return
     if not os.path.exists(_CONFIG_PATH):
+        _config_loaded = True
         return
     with open(_CONFIG_PATH) as f:
         for line in f:
@@ -31,6 +52,7 @@ def _load_config():
                 continue
             key, _, value = line.partition("=")
             os.environ.setdefault(key.strip(), value.strip())
+    _config_loaded = True
 
 
 class LLMClient:
@@ -87,7 +109,13 @@ class LLMClient:
         self._client = OpenAI(**client_kwargs)
 
     def chat(self, messages, tools=None, tool_choice=None, **kwargs):
-        """One LLM call. Returns the raw API response."""
+        """One LLM call. Returns the raw API response.
+
+        If stream=True is in kwargs, returns a generator that yields
+        (chunk, full_message) pairs. The full_message is the accumulated
+        ChatCompletion object (only populated on the last chunk for
+        tool_calls; content is built incrementally).
+        """
         params = {
             "model": self.model,
             "messages": messages,
@@ -105,6 +133,8 @@ class LLMClient:
         last_error = None
         for attempt in range(self.max_retries + 1):
             try:
+                if params.get("stream"):
+                    return self._stream(params)
                 return self._client.chat.completions.create(**params)
             except RateLimitError as e:
                 last_error = e
@@ -112,3 +142,63 @@ class LLMClient:
                     break
                 time.sleep(_RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)])
         raise last_error
+
+    def _stream(self, params: dict) -> Generator:
+        """Stream a chat completion. Yields (delta_text, accumulated_message_dict).
+
+        The accumulated_message_dict has the same shape as a non-streamed
+        response's choices[0].message: {"role", "content", "tool_calls"}.
+        Tool call arguments are accumulated across chunks.
+        """
+        stream = self._client.chat.completions.create(**params)
+
+        # Accumulator state
+        content_parts = []
+        tool_calls = {}  # index -> {id, name, arguments_parts}
+
+        for chunk in stream:
+            if not chunk.choices:
+                # Usage chunk (some providers send it last)
+                continue
+            delta = chunk.choices[0].delta
+
+            # Accumulate content
+            if delta.content:
+                content_parts.append(delta.content)
+
+            # Accumulate tool calls
+            if delta.tool_calls:
+                for tc in delta.tool_calls:
+                    idx = tc.index
+                    if idx not in tool_calls:
+                        tool_calls[idx] = {
+                            "id": tc.id or "",
+                            "name": "",
+                            "arguments_parts": [],
+                        }
+                    entry = tool_calls[idx]
+                    if tc.id:
+                        entry["id"] = tc.id
+                    if tc.function and tc.function.name:
+                        entry["name"] = tc.function.name
+                    if tc.function and tc.function.arguments:
+                        entry["arguments_parts"].append(tc.function.arguments)
+
+            # Build the accumulated message dict
+            msg = {"role": "assistant", "content": "".join(content_parts) or None}
+            if tool_calls:
+                msg["tool_calls"] = [
+                    {
+                        "id": tool_calls[i]["id"],
+                        "type": "function",
+                        "function": {
+                            "name": tool_calls[i]["name"],
+                            "arguments": "".join(tool_calls[i]["arguments_parts"]),
+                        },
+                    }
+                    for i in sorted(tool_calls)
+                ]
+            else:
+                msg["tool_calls"] = None
+
+            yield delta, msg

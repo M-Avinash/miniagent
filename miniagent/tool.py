@@ -161,3 +161,32 @@ def tool(func=None, *, name=None, description=None):
     def wrapper(f):
         return Tool(f, name=name, description=description)
     return wrapper
+
+
+def make_handoff_tool(valid_targets: list = None) -> Tool:
+    """Create a handoff tool that an agent can call to hand off to another agent.
+
+    Args:
+        valid_targets: Optional list of valid agent names. If provided, the
+            tool description includes them as valid options (helps the LLM
+            pick a valid target). If None, any string is accepted.
+
+    Returns:
+        A Tool object that the agent can call.
+    """
+    if valid_targets:
+        targets_str = ", ".join(f"'{t}'" for t in valid_targets)
+        description = f"Hand off to another agent. Valid targets: {targets_str}."
+    else:
+        description = "Hand off to another agent."
+
+    @tool(name="handoff", description=description)
+    def handoff(target_agent: str) -> str:
+        """Hand off to another agent.
+
+        Args:
+            target_agent (str): The agent to hand off to.
+        """
+        return f"[handoff: {target_agent}]"
+
+    return handoff

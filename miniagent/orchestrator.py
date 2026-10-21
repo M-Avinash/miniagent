@@ -1,15 +1,15 @@
 """orchestrator.py — multi-agent orchestration via handoffs.
 
-Three pieces that work together:
+Two pieces that work together:
 
-- make_handoff_tool(): A tool an agent calls to hand off to another agent.
-- handoff_hook(): A hook that reads the handoff tool call and sets
-  result.handoff on the agent's AgentResult.
-- HandoffOrchestrator: Follows result.handoff across agents until one
+- Marker functions: build/parse the [handoff: x] and [aborted: y] strings
+  that the loop uses to signal control flow.
+- HandoffOrchestrator: follows result.handoff across agents until one
   returns a result without a handoff (the final answer).
 
-This is the simplest form of multi-agent orchestration: a loop that follows
-agent-to-agent handoffs.
+The handoff *tool* lives in tool.py (make_handoff_tool) and the handoff
+*hook* lives in hooks.py (handoff_hook) — they're agent-building primitives,
+not orchestration logic.
 
 Usage:
     from miniagent import (
@@ -29,52 +29,48 @@ Usage:
     result = orch.run("How many orders were delivered to Germany last quarter?")
 """
 
-from .tool import Tool, tool
 from .events import EventType, AgentResult
 
 
-def make_handoff_tool(valid_targets: list = None) -> Tool:
-    """Create a handoff tool that an agent can call to hand off to another agent.
+# ---------------------------------------------------------------------------
+# Markers — the string contract between the agent loop and the orchestrator
+# ---------------------------------------------------------------------------
 
-    Args:
-        valid_targets: Optional list of valid agent names. If provided, the
-            tool description includes them as valid options (helps the LLM
-            pick a valid target). If None, any string is accepted.
-
-    Returns:
-        A Tool object that the agent can call.
-    """
-    if valid_targets:
-        targets_str = ", ".join(f"'{t}'" for t in valid_targets)
-        description = f"Hand off to another agent. Valid targets: {targets_str}."
-    else:
-        description = "Hand off to another agent."
-
-    @tool(name="handoff", description=description)
-    def handoff(target_agent: str) -> str:
-        """Hand off to another agent.
-
-        Args:
-            target_agent (str): The agent to hand off to.
-        """
-        return f"[handoff: {target_agent}]"
-
-    return handoff
+def make_handoff_marker(target: str) -> str:
+    """Build a handoff marker string: '[handoff: agent_name]'."""
+    return f"[handoff: {target}]"
 
 
-def handoff_hook(event):
-    """Hook that reads a handoff tool call and sets event.data['handoff'].
+def parse_handoff(text: str) -> str | None:
+    """Extract the target agent name from a handoff marker, or None."""
+    if not text:
+        return None
+    text = text.strip()
+    if text.startswith("[handoff:"):
+        name = text[len("[handoff:"):].rstrip("]").strip()
+        return name if name else None
+    return None
 
-    Attach this to an agent's hooks. When the agent calls the handoff tool,
-    this hook sets event.data['handoff'] to the target agent name and aborts
-    the agent's run (so the orchestrator can route to the next agent).
-    """
-    if event.type == EventType.TOOL_CALL and event.tool_name == "handoff":
-        event.data["handoff"] = event.tool_args.get("target_agent")
-        event.data["abort"] = True
-        event.data["abort_reason"] = f"handoff to {event.data['handoff']}"
-    return event
 
+def make_abort_marker(reason: str) -> str:
+    """Build an abort marker string: '[aborted: reason]'."""
+    return f"[aborted: {reason}]"
+
+
+def parse_abort(text: str) -> str | None:
+    """Extract the reason from an abort marker, or None."""
+    if not text:
+        return None
+    text = text.strip()
+    if text.startswith("[aborted:"):
+        reason = text[len("[aborted:"):].rstrip("]").strip()
+        return reason if reason else None
+    return None
+
+
+# ---------------------------------------------------------------------------
+# HandoffOrchestrator — follows the handoff chain
+# ---------------------------------------------------------------------------
 
 class HandoffOrchestrator:
     """Run a sequence of agents, following handoffs.
