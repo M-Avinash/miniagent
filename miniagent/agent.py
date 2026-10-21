@@ -10,7 +10,6 @@ model must use a tool rather than answer from its weights); later turns use
 "auto" so the model can stop and answer. The loop is bounded by max_tool_calls.
 """
 
-import concurrent.futures
 import dataclasses
 import json
 import typing
@@ -300,60 +299,6 @@ class Agent:
         for k in ("prompt_tokens", "completion_tokens", "total_tokens"):
             merged[k] = merged.get(k, 0) + turn.get(k, 0)
         return merged
-
-
-# ---------------------------------------------------------------------------
-# Parallel Fan-Out (#11)
-# ---------------------------------------------------------------------------
-
-def fan_out(agents: list, messages: list, timeout: int = None,
-            max_workers: int = None) -> list:
-    """Run multiple agents in parallel (thread-based, not async).
-
-    Each agent runs its own full loop in its own thread. Returns a list of
-    AgentResult, in the same order as the input agents.
-
-    Args:
-        agents: List of Agent objects to run in parallel.
-        messages: List of user messages (one per agent, same order).
-        timeout: Max seconds to wait for all agents. If exceeded, agents
-            that haven't finished are marked as aborted.
-        max_workers: Max threads (default: len(agents), capped at 20).
-
-    Returns:
-        List of AgentResult, one per agent. If timeout is hit, unfinished
-        agents get aborted=True with abort_reason='fan_out timeout'.
-    """
-    if len(agents) != len(messages):
-        raise ValueError(f"agents ({len(agents)}) and messages ({len(messages)}) must match")
-
-    workers = min(max_workers or len(agents), 20)
-    results = [None] * len(agents)
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {
-            pool.submit(a.run, m): i
-            for i, (a, m) in enumerate(zip(agents, messages))
-        }
-        try:
-            for future in concurrent.futures.as_completed(futures, timeout=timeout):
-                i = futures[future]
-                try:
-                    results[i] = future.result()
-                except Exception as e:
-                    results[i] = AgentResult(
-                        text="", turns=0, tool_calls=[],
-                        aborted=True, abort_reason=f"fan_out error: {e}",
-                    )
-        except concurrent.futures.TimeoutError:
-            for future, i in futures.items():
-                if results[i] is None:
-                    future.cancel()
-                    results[i] = AgentResult(
-                        text="", turns=0, tool_calls=[],
-                        aborted=True, abort_reason="fan_out timeout",
-                    )
-    return results
 
 
 # ---------------------------------------------------------------------------

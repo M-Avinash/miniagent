@@ -17,7 +17,7 @@ from .hooks import HookFn, HookPipeline, handoff_hook
 from .llm import LLMClient
 from .memory import Memory
 from .tool import Tool, tool, make_handoff_tool
-from .agent import Agent, fan_out, make_supervisor_tool
+from .agent import Agent, make_supervisor_tool
 from .structured import build_structured_prompt, extract_json, parse_structured
 from .sandbox import run_python
 from .observe import verbose_log
@@ -31,7 +31,7 @@ from .graph_memory import GraphMemory, graph_memory_hook, graph_injection_hook
 
 __all__ = [
     "Agent", "LLMClient", "Memory", "Tool", "tool",
-    "fan_out", "make_supervisor_tool",
+    "make_supervisor_tool",
     "HookEvent", "HookFn", "HookPipeline", "EventType", "AgentResult",
     "build_structured_prompt", "extract_json", "parse_structured",
     "run_python",

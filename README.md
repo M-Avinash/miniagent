@@ -149,7 +149,8 @@ For multi-agent chains, give each agent a `make_handoff_tool(...)` and run them 
 |---------|-----|----------|
 | **Handoff chain** | `HandoffOrchestrator([a, b, c])` | Fixed pipeline: A → B → C |
 | **Supervisor** | `make_supervisor_tool(workers)` | One agent dynamically routes to N workers |
-| **Parallel fan-out** | `fan_out([a, b, c], [msg1, msg2, msg3])` | Run N agents in parallel, collect results |
+
+To run agents in parallel, use your own `concurrent.futures.ThreadPoolExecutor` — each `Agent.run()` call is independent, so one thread per agent is all you need.
 
 ### Structured output
 
