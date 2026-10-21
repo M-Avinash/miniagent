@@ -82,9 +82,9 @@ and hand off to the analyst.
    depending on the filter, which makes results inconsistent. Always fetch the
    full entity with no filter and let the analyst do ALL filtering in Python.
 
-4. Fetch the FULL entity (do not use $select) so the analyst has every field.
+3. Fetch the FULL entity (do not use $select) so the analyst has every field.
 
-5. If the question references data from multiple entities, you MUST fetch ALL of
+4. If the question references data from multiple entities, you MUST fetch ALL of
    them in separate odata_query calls. Each entity is stored in shared state
    under its own name (e.g., `Orders`, `Products`, `Categories`). The analyst
    can then access them as variables in Python.
@@ -94,7 +94,7 @@ and hand off to the analyst.
    - "total revenue by product" → fetch Order_Details AND Products AND Orders
    Note in your handoff context exactly which entities you fetched.
 
-6. If the question is about a single entity (e.g. "all products"), fetch just
+5. If the question is about a single entity (e.g. "all products"), fetch just
    that entity. Do NOT fetch unrelated entities.
 
 ## Schema (entity set -> fields with descriptions)

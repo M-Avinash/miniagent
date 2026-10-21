@@ -3,11 +3,6 @@
 Run: python -m miniagent.examples.northwind.app
 """
 
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
-
 from miniagent import HandoffOrchestrator
 
 from .schema import fetch_schema, _schema

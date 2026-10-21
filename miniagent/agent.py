@@ -84,7 +84,9 @@ class Agent:
             messages = ev.messages if ev.messages is not None else messages
 
             tool_choice = "required" if (turn == 1 and self.tools) else "auto"
-            msg = self._llm_call(messages, tool_choice, turn)
+            msg, turn_usage = self._llm_call(messages, tool_choice, turn)
+            if turn_usage:
+                usage = self._merge_usage(usage, turn_usage)
 
             ev = self.hooks.emit(HookEvent(type=EventType.LLM_RESPONSE, turn=turn,
                                            messages=messages, response=msg))
@@ -100,11 +102,6 @@ class Agent:
                 msg_dict = msg
             self.memory.add(msg_dict)
             last_text = msg_dict.get("content") or ""
-
-            # Track usage (non-stream path stores it on self)
-            if hasattr(self, "_last_usage"):
-                usage = self._last_usage
-                del self._last_usage
 
             if not msg_dict.get("tool_calls"):
                 ev = HookEvent(type=EventType.AGENT_END, turn=turn,
@@ -152,12 +149,11 @@ class Agent:
                 final_msg = acc_msg
                 if self.stream_hook and delta and delta.content:
                     self.stream_hook(delta.content, acc_msg, turn)
-            return final_msg or {"role": "assistant", "content": None, "tool_calls": None}
+            return (final_msg or {"role": "assistant", "content": None, "tool_calls": None}), {}
         else:
             resp = self.llm.chat(messages, tools=schemas, tool_choice=tool_choice)
-            if getattr(resp, "usage", None):
-                self._last_usage = self._usage_dict(resp.usage)
-            return resp.choices[0].message
+            turn_usage = self._usage_dict(resp.usage) if getattr(resp, "usage", None) else {}
+            return resp.choices[0].message, turn_usage
 
     def _run_tool_dict(self, name, tool_call_id, turn, args):
         """Run a tool call from a dict-format message (streaming path).
@@ -295,6 +291,15 @@ class Agent:
             "completion_tokens": getattr(usage, "completion_tokens", 0),
             "total_tokens": getattr(usage, "total_tokens", 0),
         }
+
+    @staticmethod
+    def _merge_usage(acc: dict, turn: dict) -> dict:
+        """Sum per-turn usage into the running total (thread-safe: no shared
+        instance state)."""
+        merged = dict(acc)
+        for k in ("prompt_tokens", "completion_tokens", "total_tokens"):
+            merged[k] = merged.get(k, 0) + turn.get(k, 0)
+        return merged
 
 
 # ---------------------------------------------------------------------------

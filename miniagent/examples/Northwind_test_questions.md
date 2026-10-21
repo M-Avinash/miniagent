@@ -65,8 +65,9 @@ Ask these in order (the shared state persists between turns):
 ## Notes
 
 - **Joins** (questions 4, 7, 9) require the agent to reconcile two datasets on
-  IDs. The agent fetches each entity in separate calls; only the last fetch
-  persists in shared state, so the analyst works with one dataset at a time.
+  IDs. The agent fetches each entity in a separate `odata_query` call; every
+  fetched entity is kept in shared state under its own name, so the analyst
+  can access all of them as Python variables in one `analyze_data` run.
 - **Date math** (questions 1, 6, 8) stress-tests the `analyze_data` tool on
   large result sets.
 - **Multi-turn** sequences test that `shared_state` persists and the analyst

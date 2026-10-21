@@ -49,8 +49,10 @@ miniagent/
   examples/
     northwind/      — multi-agent OData QnA chatbot (app, tools, agents, schema)
   tests/
-    test_framework.py          — 121 checks (unit + live LLM integration)
-    northwind_ground_truth.json
+    conftest.py                — pytest config (live marker, import path)
+    test_unit.py               — offline unit tests (no network, CI-safe)
+    test_live.py               — live LLM + Northwind OData integration tests
+    northwind_ground_truth.json — precomputed answers for the ground-truth checks
 docs/
   modules.md        — what each module does
   validation.md     — how the framework was tested
@@ -106,10 +108,14 @@ You're now in the chatbot. Type a question and press Enter. Type `reset` to clea
 **Step 4 (optional):** Run the test suite
 
 ```bash
-python miniagent/tests/test_framework.py
+# Offline unit tests (no network, no LLM) — safe for CI:
+pytest miniagent/tests/test_unit.py
+
+# Live integration tests (need a reachable LLM + the Northwind OData service):
+MINIAGENT_RUN_LIVE=1 pytest miniagent/tests/test_live.py
 ```
 
-121 checks: unit tests (tools, sandbox, hooks, memory, structured output, orchestrator) plus live LLM integration tests and the Northwind example against ground truth. Requires a reachable LLM endpoint (see Step 2).
+`test_unit.py` covers tools, sandbox, hooks, memory, structured output, and the orchestrator's state handling — all offline. `test_live.py` runs real LLM integration tests plus the Northwind example checked against `northwind_ground_truth.json` (answers precomputed with pure Python, no LLM). Live tests are skipped unless `MINIAGENT_RUN_LIVE=1` is set.
 
 ## Build Your Own Agent
 
