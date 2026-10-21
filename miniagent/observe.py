@@ -1,17 +1,18 @@
-"""observe.py — verbose logging hook.
+"""observe.py — logging and tracing hooks.
 
-Attach verbose_log to an Agent's hooks to see every event as it happens:
-turns, LLM calls, tool calls, tool results, token usage. Per-agent labeling
-so multiple agents in the same process don't get mixed up.
+Two hooks:
+  verbose_log  — human-readable terminal log (per-agent labeled)
+  trace_hook   — machine-readable JSONL audit trail (one line per event)
 
 Usage:
-    from miniagent.observe import verbose_log
-    agent = Agent("...", hooks=[verbose_log("my-agent")])
+    from miniagent.observe import verbose_log, trace_hook
+    agent = Agent("...", hooks=[verbose_log("my-agent"), trace_hook("trace.jsonl")])
 """
 
 import json
 import sys
 import time
+import uuid
 
 
 def verbose_log(label: str = "agent", debug: bool = False, log_file: str = None):
@@ -74,3 +75,50 @@ def verbose_log(label: str = "agent", debug: bool = False, log_file: str = None)
         return event
 
     return _log
+
+
+def trace_hook(path: str, run_id: str = None):
+    """Return a hook that writes a machine-readable JSONL audit trail.
+
+    One line per event, timestamped, with agent name, turn number, and the
+    full payload. Use for production debugging, replay, or metrics.
+
+    Args:
+        path: File to append JSONL lines to.
+        run_id: Optional run identifier (auto-generated if not provided).
+            Use the same run_id across multiple agents in a multi-agent run
+            to correlate their events.
+
+    Example:
+        run_id = str(uuid.uuid4())
+        agent_a = Agent("...", hooks=[trace_hook("trace.jsonl", run_id)])
+        agent_b = Agent("...", hooks=[trace_hook("trace.jsonl", run_id)])
+    """
+    if run_id is None:
+        run_id = str(uuid.uuid4())
+
+    def _trace(event):
+        entry = {
+            "ts": time.time(),
+            "run_id": run_id,
+            "event": event.type.value,
+            "turn": event.turn,
+        }
+        if event.tool_name:
+            entry["tool_name"] = event.tool_name
+        if event.tool_args is not None:
+            entry["tool_args"] = event.tool_args
+        if event.tool_result is not None:
+            entry["tool_result"] = event.tool_result
+        if event.data:
+            entry["data"] = event.data
+        if event.error:
+            entry["error"] = str(event.error)
+        try:
+            with open(path, "a") as f:
+                f.write(json.dumps(entry, default=str) + "\n")
+        except OSError:
+            pass
+        return event
+
+    return _trace

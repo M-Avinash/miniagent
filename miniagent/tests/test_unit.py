@@ -19,8 +19,9 @@ from miniagent import (
     Agent, LLMClient, Memory, Tool, tool,
     HookEvent, HookFn, HookPipeline, EventType, AgentResult,
     build_structured_prompt, extract_json, parse_structured,
-    run_python, verbose_log, ObservationalMemory,
+    run_python, verbose_log, trace_hook, ObservationalMemory,
     HandoffOrchestrator, make_handoff_tool, handoff_hook,
+    make_supervisor_tool, make_agent_tool,
     GraphMemory, graph_memory_hook, graph_injection_hook,
 )
 
@@ -444,3 +445,155 @@ class TestMultiEntitySharedState:
         assert "Products" in shared_state["data_desc"]
         shared_state["entities"].clear()
         assert len(shared_state["entities"]) == 0
+
+
+# ─── 18. make_supervisor_tool (offline: tool shape + error paths) ────────
+class TestSupervisorTool:
+    def test_tool_name_and_schema(self):
+        a = Agent("worker a", name="a")
+        b = Agent("worker b", name="b")
+        t = make_supervisor_tool({"a": a, "b": b})
+        assert t.name == "call_worker"
+        schema = t.to_openai_schema()
+        assert "agent_name" in schema["function"]["parameters"]["properties"]
+        assert "task" in schema["function"]["parameters"]["properties"]
+
+    def test_unknown_worker_returns_error(self):
+        a = Agent("worker a", name="a")
+        t = make_supervisor_tool({"a": a})
+        result = t({"agent_name": "nonexistent", "task": "do something"})
+        assert "[error: unknown worker" in result
+
+    def test_worker_abort_returns_error(self):
+        """If the worker aborts, the supervisor gets an error string."""
+        def abort_hook(event):
+            if event.type == EventType.AGENT_START:
+                event.data["abort"] = True
+                event.data["abort_reason"] = "blocked"
+            return event
+        a = Agent("worker", hooks=[abort_hook], name="a")
+        t = make_supervisor_tool({"a": a})
+        result = t({"agent_name": "a", "task": "do something"})
+        assert "[error: a aborted" in result
+
+
+# ─── 19. make_agent_tool (offline: tool shape + error paths) ─────────────
+class TestAgentTool:
+    def test_tool_name(self):
+        a = Agent("researcher", name="researcher")
+        t = make_agent_tool(a)
+        assert t.name == "call_researcher"
+
+    def test_description_override(self):
+        a = Agent("researcher", name="researcher")
+        t = make_agent_tool(a, description="Custom description")
+        assert t.to_openai_schema()["function"]["description"] == "Custom description"
+
+    def test_unknown_agent_name_fallback(self):
+        a = Agent("no name")
+        t = make_agent_tool(a)
+        assert t.name == "call_sub_agent"
+
+
+# ─── 20. trace_hook (offline: writes JSONL) ──────────────────────────────
+class TestTraceHook:
+    def test_writes_jsonl(self, tmp_path):
+        p = str(tmp_path / "trace.jsonl")
+        hook = trace_hook(p, run_id="test-run")
+        hook(HookEvent(type=EventType.AGENT_START, data={"user_message": "hi"}))
+        hook(HookEvent(type=EventType.TOOL_CALL, turn=1, tool_name="test", tool_args={"x": 1}))
+        hook(HookEvent(type=EventType.AGENT_END, turn=1))
+        lines = open(p).readlines()
+        assert len(lines) == 3
+        first = json.loads(lines[0])
+        assert first["run_id"] == "test-run"
+        assert first["event"] == "agent_start"
+        second = json.loads(lines[1])
+        assert second["tool_name"] == "test"
+        assert second["tool_args"] == {"x": 1}
+
+    def test_auto_run_id(self, tmp_path):
+        p = str(tmp_path / "trace.jsonl")
+        hook = trace_hook(p)
+        hook(HookEvent(type=EventType.AGENT_START, data={}))
+        line = json.loads(open(p).readline())
+        assert "run_id" in line and len(line["run_id"]) > 0
+
+
+# ─── 21. Tool result caching (offline) ───────────────────────────────────
+class TestToolCaching:
+    def test_cache_key_computation(self):
+        """Verify the cache key is deterministic for the same args."""
+        import json as _json
+        args1 = {"b": 2, "a": 1}
+        args2 = {"a": 1, "b": 2}
+        k1 = ("tool", _json.dumps(args1, sort_keys=True, default=str))
+        k2 = ("tool", _json.dumps(args2, sort_keys=True, default=str))
+        assert k1 == k2
+
+    def test_different_args_different_keys(self):
+        import json as _json
+        k1 = ("tool", _json.dumps({"a": 1}, sort_keys=True, default=str))
+        k2 = ("tool", _json.dumps({"a": 2}, sort_keys=True, default=str))
+        assert k1 != k2
+
+
+# ─── 22. on_failure in orchestrator (offline: callback wiring) ──────────
+class TestOnFailure:
+    def test_callback_stored(self):
+        a = Agent("a", name="a")
+        b = Agent("b", name="b")
+        def my_callback(agent, result, question):
+            return None
+        orch = HandoffOrchestrator([a, b], agent_names={"a": a, "b": b},
+                                   on_failure=my_callback)
+        assert orch.on_failure is my_callback
+
+    def test_default_none(self):
+        a = Agent("a", name="a")
+        orch = HandoffOrchestrator([a])
+        assert orch.on_failure is None
+
+
+# ─── 23. _build_output_schema (offline: no eval) ─────────────────────────
+class TestBuildOutputSchema:
+    def test_dataclass(self):
+        from dataclasses import dataclass
+        @dataclass
+        class Answer:
+            city: str
+            population: int
+        schema = Agent._build_output_schema(Answer)
+        assert schema["type"] == "object"
+        assert schema["properties"]["city"]["type"] == "string"
+        assert schema["properties"]["population"]["type"] == "integer"
+        assert "city" in schema["required"]
+        assert "population" in schema["required"]
+
+    def test_dataclass_with_default(self):
+        from dataclasses import dataclass, field
+        @dataclass
+        class Config:
+            name: str
+            verbose: bool = False
+        schema = Agent._build_output_schema(Config)
+        assert "name" in schema["required"]
+        assert "verbose" not in schema["required"]
+
+    def test_forward_reference(self):
+        """Forward references (string annotations) must resolve without eval."""
+        from dataclasses import dataclass
+        @dataclass
+        class Item:
+            name: str
+            tags: "list[str]"
+        schema = Agent._build_output_schema(Item)
+        assert schema["properties"]["tags"]["type"] == "array"
+
+    def test_unknown_type_defaults_to_string(self):
+        from dataclasses import dataclass
+        @dataclass
+        class Weird:
+            x: "SomeUnknownType"
+        schema = Agent._build_output_schema(Weird)
+        assert schema["properties"]["x"]["type"] == "string"

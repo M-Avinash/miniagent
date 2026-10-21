@@ -42,7 +42,7 @@ miniagent/
   memory.py         — bounded conversation window
   structured.py     — JSON extraction + validation
   sandbox.py        — run_python (isolated subprocess)
-  observe.py        — verbose_log hook
+  observe.py        — verbose_log + trace_hook (JSONL audit trail)
   observation.py    — ObservationalMemory (cross-run JSONL)
   orchestrator.py   — HandoffOrchestrator + handoff/abort markers
   graph_memory.py   — GraphMemory + hooks
@@ -149,8 +149,18 @@ For multi-agent chains, give each agent a `make_handoff_tool(...)` and run them 
 |---------|-----|----------|
 | **Handoff chain** | `HandoffOrchestrator([a, b, c])` | Fixed pipeline: A → B → C |
 | **Supervisor** | `make_supervisor_tool(workers)` | One agent dynamically routes to N workers |
+| **Agent as tool** | `make_agent_tool(sub_agent)` | Nest agents: parent calls sub-agent like a tool |
 
 To run agents in parallel, use your own `concurrent.futures.ThreadPoolExecutor` — each `Agent.run()` call is independent, so one thread per agent is all you need.
+
+### Observability
+
+- **`verbose_log(label)`** — human-readable terminal log, per-agent labeled.
+- **`trace_hook(path, run_id)`** — machine-readable JSONL audit trail. One line per event (LLM call, tool call, result, start/end), timestamped, with `run_id` for correlating multi-agent runs.
+
+### Failure routing
+
+`HandoffOrchestrator` accepts an `on_failure` callback: `(failed_agent, result, question) -> AgentResult | Agent | str | None`. Return a new `Agent` to retry with a different agent, a `str` to retry with a new message, an `AgentResult` to short-circuit, or `None` to accept the abort.
 
 ### Structured output
 

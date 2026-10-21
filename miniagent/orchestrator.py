@@ -83,7 +83,7 @@ class HandoffOrchestrator:
     """
 
     def __init__(self, agents: list, max_handoffs: int = 10, agent_names: dict = None,
-                 shared_state: dict = None):
+                 shared_state: dict = None, on_failure=None):
         self.agents = agents
         self.max_handoffs = max_handoffs
         self.agent_names = agent_names or {}
@@ -93,6 +93,12 @@ class HandoffOrchestrator:
         self.shared_state = shared_state if shared_state is not None else {}
         if "session" not in self.shared_state:
             self.shared_state["session"] = []  # list of {question, answer}
+        # on_failure: optional callback (failed_agent, result, original_question) ->
+        #   AgentResult  (accept the abort, return this result)
+        #   Agent        (retry with this agent)
+        #   str          (retry with this message)
+        #   None         (accept the abort, return the original result)
+        self.on_failure = on_failure
 
     def _get_agent(self, name: str) -> object:
         """Look up an agent by name. Returns None if not found.
@@ -161,6 +167,23 @@ class HandoffOrchestrator:
 
         for _ in range(self.max_handoffs + 1):
             result = current_agent.run(user_message)
+
+            # Failure routing: if the agent aborted, give on_failure a chance
+            # to retry with a different agent or message.
+            if result.aborted and self.on_failure:
+                action = self.on_failure(current_agent, result, original_question)
+                if isinstance(action, AgentResult):
+                    return action
+                elif isinstance(action, str):
+                    user_message = action
+                    continue  # retry same agent with new message
+                elif hasattr(action, "run"):
+                    current_agent = action
+                    user_message = self._build_user_message(
+                        original_question, previous_result=result.text,
+                    )
+                    continue  # retry with a different agent
+                # else: None → accept the abort
 
             if result.handoff:
                 next_agent = self._get_agent(result.handoff)

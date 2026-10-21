@@ -17,10 +17,10 @@ from .hooks import HookFn, HookPipeline, handoff_hook
 from .llm import LLMClient
 from .memory import Memory
 from .tool import Tool, tool, make_handoff_tool
-from .agent import Agent, make_supervisor_tool
+from .agent import Agent, make_supervisor_tool, make_agent_tool
 from .structured import build_structured_prompt, extract_json, parse_structured
 from .sandbox import run_python
-from .observe import verbose_log
+from .observe import verbose_log, trace_hook
 from .observation import ObservationalMemory
 from .orchestrator import (
     HandoffOrchestrator,
@@ -31,11 +31,11 @@ from .graph_memory import GraphMemory, graph_memory_hook, graph_injection_hook
 
 __all__ = [
     "Agent", "LLMClient", "Memory", "Tool", "tool",
-    "make_supervisor_tool",
+    "make_supervisor_tool", "make_agent_tool",
     "HookEvent", "HookFn", "HookPipeline", "EventType", "AgentResult",
     "build_structured_prompt", "extract_json", "parse_structured",
     "run_python",
-    "verbose_log",
+    "verbose_log", "trace_hook",
     "ObservationalMemory",
     "HandoffOrchestrator",
     "make_handoff_tool",

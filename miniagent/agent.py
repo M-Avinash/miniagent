@@ -65,6 +65,7 @@ class Agent:
 
         all_tool_calls = []
         usage = {}
+        self._tool_cache = {}  # per-run cache: (tool_name, args_hash) -> result
 
         ev = self.hooks.emit(HookEvent(type=EventType.AGENT_START, data={"user_message": user_message}))
         if ev.data.get("abort"):
@@ -174,10 +175,16 @@ class Agent:
         if validation_error:
             return f"[error: {validation_error}]", ev
 
-        try:
-            result = tool_obj(args)
-        except Exception as e:
-            result = f"[error: {type(e).__name__}: {e}]"
+        # Per-run cache: same tool + same args → same result (no re-execution)
+        cache_key = (name, json.dumps(args, sort_keys=True, default=str))
+        if cache_key in self._tool_cache:
+            result = self._tool_cache[cache_key]
+        else:
+            try:
+                result = tool_obj(args)
+            except Exception as e:
+                result = f"[error: {type(e).__name__}: {e}]"
+            self._tool_cache[cache_key] = result
 
         if isinstance(result, (dict, list)):
             result = json.dumps(result)
@@ -254,18 +261,28 @@ class Agent:
 
     @staticmethod
     def _build_output_schema(output_type) -> dict:
-        """Build a JSON schema dict from a dataclass or pydantic model."""
+        """Build a JSON schema dict from a dataclass or pydantic model.
+
+        Uses typing.get_type_hints (no eval) to resolve forward references
+        safely.
+        """
         if dataclasses.is_dataclass(output_type):
+            try:
+                hints = typing.get_type_hints(output_type)
+            except (NameError, TypeError):
+                hints = Agent._resolve_hints_fallback(output_type)
+            type_map = {
+                str: "string", int: "integer", float: "number",
+                bool: "boolean", list: "array", dict: "object",
+            }
             props = {}
             required = []
             for f in dataclasses.fields(output_type):
-                py_type = f.type
-                if isinstance(py_type, str):
-                    py_type = eval(py_type, {**typing.get_type_hints(output_type), 'list': list, 'dict': dict})
-                type_map = {
-                    str: "string", int: "integer", float: "number",
-                    bool: "boolean", list: "array", dict: "object",
-                }
+                py_type = hints.get(f.name, str)
+                # Handle generic aliases like list[str], dict[str, int]
+                origin = getattr(py_type, "__origin__", None)
+                if origin is not None:
+                    py_type = origin
                 json_type = type_map.get(py_type, "string")
                 props[f.name] = {"type": json_type}
                 if f.default is dataclasses.MISSING:
@@ -275,6 +292,35 @@ class Agent:
             return output_type.model_json_schema()
         else:
             return {"type": "object"}
+
+    @staticmethod
+    def _resolve_hints_fallback(output_type) -> dict:
+        """Resolve dataclass field types without eval.
+
+        Handles simple forward refs like 'list[str]', 'dict', 'int' by
+        matching against a small table. Unresolvable types default to str.
+        """
+        import re
+        simple = {
+            "str": str, "int": int, "float": float, "bool": bool,
+            "list": list, "dict": dict,
+        }
+        hints = {}
+        for f in dataclasses.fields(output_type):
+            t = f.type
+            if not isinstance(t, str):
+                hints[f.name] = t
+                continue
+            t = t.strip()
+            if t in simple:
+                hints[f.name] = simple[t]
+            else:
+                m = re.match(r"^(list|dict)\s*\[", t)
+                if m:
+                    hints[f.name] = simple[m.group(1)]
+                else:
+                    hints[f.name] = str
+        return hints
 
     @staticmethod
     def _aborted(reason, turns, tool_calls, usage, text="") -> AgentResult:
@@ -356,3 +402,53 @@ def make_supervisor_tool(agents: dict, description: str = None):
             return f"[error: {agent_name} failed: {type(e).__name__}: {e}]"
 
     return call_worker
+
+
+# ---------------------------------------------------------------------------
+# Agent Composition (#9) — wrap an agent as a tool
+# ---------------------------------------------------------------------------
+
+def make_agent_tool(sub_agent: "Agent", description: str = None) -> "Tool":
+    """Wrap an agent as a tool so a parent agent can call it.
+
+    The parent's loop IS the hierarchy — it calls the sub-agent like any
+    other tool, reads the result, decides next steps. No new orchestration
+    layer needed.
+
+    Args:
+        sub_agent: The Agent to wrap.
+        description: Optional tool description override.
+
+    Returns:
+        A Tool object. The parent calls call_<name>(task) and gets back the
+        sub-agent's final answer text.
+
+    Example:
+        researcher = Agent("You research topics...", name="researcher")
+        manager = Agent(
+            "You delegate research to the researcher agent.",
+            tools=[make_agent_tool(researcher)],
+            name="manager",
+        )
+        result = manager.run("Research the history of the Roman Empire")
+    """
+    name = sub_agent.name or "sub_agent"
+    if not description:
+        description = f"Run the {name} agent on a task."
+
+    @tool(name=f"call_{name}", description=description)
+    def call_sub_agent(task: str) -> str:
+        """Give a task to the sub-agent and get its answer.
+
+        Args:
+            task (str): The task to perform.
+        """
+        try:
+            result = sub_agent.run(task)
+            if result.aborted:
+                return f"[error: {name} aborted: {result.abort_reason}]"
+            return result.text
+        except Exception as e:
+            return f"[error: {name} failed: {type(e).__name__}: {e}]"
+
+    return call_sub_agent

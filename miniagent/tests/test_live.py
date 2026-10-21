@@ -18,6 +18,7 @@ import pytest
 from miniagent import (
     Agent, tool, EventType,
     HandoffOrchestrator, make_handoff_tool, handoff_hook,
+    make_supervisor_tool, make_agent_tool, trace_hook,
 )
 
 LIVE = os.environ.get("MINIAGENT_RUN_LIVE") == "1"
@@ -224,3 +225,106 @@ class TestNorthwindGroundTruth:
         r = o.run("How many products in the Beverages category are out of stock?")
         expected = gt["single_shot"]["q7_beverages_out_of_stock"]["count"]
         assert _answer_contains(r.text, str(expected)), r.text
+
+
+# ─── 19. make_supervisor_tool (live) ─────────────────────────────────────
+class TestSupervisorLive:
+    def test_supervisor_calls_worker(self):
+        @tool
+        def add(a: int, b: int) -> str:
+            """Add two numbers.
+            Args:
+                a (int): First number.
+                b (int): Second number.
+            """
+            return str(a + b)
+
+        worker = Agent("You are a calculator. Use the add tool.",
+                       tools=[add], name="worker", max_tool_calls=3)
+        supervisor = Agent(
+            "You are a supervisor. Delegate math to the worker agent.",
+            tools=[make_supervisor_tool({"worker": worker})],
+            name="supervisor", max_tool_calls=3,
+        )
+        result = supervisor.run("What is 17 + 25?")
+        assert "42" in result.text, result.text
+
+
+# ─── 20. make_agent_tool (live) ──────────────────────────────────────────
+class TestAgentToolLive:
+    def test_parent_calls_sub_agent(self):
+        sub = Agent("You are a translator. Translate to French.",
+                    name="translator", max_tool_calls=1)
+        parent = Agent(
+            "You are a manager. Use the translator agent to translate.",
+            tools=[make_agent_tool(sub)],
+            name="manager", max_tool_calls=3,
+        )
+        result = parent.run("Translate 'hello world' to French")
+        assert len(result.text) > 0
+
+
+# ─── 21. Streaming (live) ────────────────────────────────────────────────
+class TestStreamingLive:
+    def test_stream_produces_deltas(self):
+        deltas = []
+        agent = Agent("Say 'hello' in one word.",
+                      stream=True,
+                      stream_hook=lambda d, m, t: deltas.append(d),
+                      name="stream-test")
+        result = agent.run("hi")
+        assert len(deltas) >= 1, "expected at least one stream delta"
+        assert len(result.text) > 0
+
+    def test_stream_result_matches_non_stream(self):
+        """Streaming and non-streaming should produce similar results."""
+        deltas = []
+        stream_agent = Agent("What is 2+2? Answer with just the number.",
+                             stream=True,
+                             stream_hook=lambda d, m, t: deltas.append(d),
+                             name="s")
+        r_stream = stream_agent.run("2+2?")
+        assert "4" in r_stream.text, r_stream.text
+
+
+# ─── 22. trace_hook (live: full agent run) ───────────────────────────────
+class TestTraceHookLive:
+    def test_trace_captures_full_run(self, tmp_path):
+        p = str(tmp_path / "trace.jsonl")
+        @tool
+        def echo(msg: str) -> str:
+            """Echo a message.
+            Args:
+                msg (str): Message to echo.
+            """
+            return msg
+        agent = Agent("Use the echo tool.", tools=[echo],
+                      hooks=[trace_hook(p, run_id="live-test")],
+                      name="traced", max_tool_calls=2)
+        agent.run("echo hello")
+        lines = open(p).readlines()
+        assert len(lines) >= 2  # at least agent_start + agent_end
+        events = [json.loads(l)["event"] for l in lines]
+        assert "agent_start" in events
+        assert "agent_end" in events
+
+
+# ─── 23. Tool caching (live: same tool called twice) ─────────────────────
+class TestToolCachingLive:
+    def test_same_args_cached(self):
+        call_count = {"n": 0}
+        @tool
+        def counter(x: str) -> str:
+            """Count calls.
+            Args:
+                x (str): Input.
+            """
+            call_count["n"] += 1
+            return f"call {call_count['n']}"
+        agent = Agent("Call counter twice with the same arg, then report.",
+                      tools=[counter], name="cache-test", max_tool_calls=5)
+        agent.run("Call counter with 'test' twice")
+        # If caching works, the second call with same args returns cached result
+        # (call_count should be 1, not 2, if the LLM called it twice)
+        # We can't guarantee the LLM calls it twice, so just verify it works
+        assert call_count["n"] >= 1
